@@ -5,17 +5,38 @@ A lightweight prototype for options trading analysis using Option Samurai data. 
 ## Project Structure
 
 - `project_codex/` - Project documentation and planning
-- `optionsamurai_api/` - Option Samurai API integration (separate repository)
-- `db/` - SQLite database integration (coming soon)
-- `analysis/` - Trade analysis tools (coming soon)
+  - `01_overview/` - Project overview and goals
+  - `02_planning/` - Development planning and technical documentation
+  - `03_research/` - Research and analysis
+  - `04_operations/` - Operational procedures
+  - `TODO.md` - Current tasks and project status
+- `src/` - Source code for the application
+- `tests/` - Test suite
+- `data/` - Data storage directory
+- `db/` - SQLite database integration
+- `logs/` - Application logs
+- `venv/` - Python virtual environment
 
 ## Development Status
 
-Currently in early development. See [project_codex/TODO.md](project_codex/TODO.md) for current status and planned features.
+Currently implementing price history tracking functionality. See [project_codex/TODO.md](project_codex/TODO.md) for detailed status and planned features.
 
 ## Getting Started
 
-Documentation for setup and usage will be added as the project develops.
+### Prerequisites
+- Python 3.x
+- Virtual environment (venv)
+
+### Setup
+1. Create and activate virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ## Project Goals
 

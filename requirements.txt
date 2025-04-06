@@ -8,6 +8,7 @@
 
 # Required Dependencies
 requests  # For making HTTP requests (e.g., to Option Samurai API)
+yfinance>=0.2.36
 
 # Potential Future Dependencies:
 # DBUtils   # For connection pooling if needed

@@ -56,25 +56,6 @@ Sub-tasks:
 
 ## 🔥 ACTIVE
 
-### [2024-03-19] Add Price History Tracking #004
-Status: ACTIVE
-Priority: HIGH
-Owner: @stewo
-Dependencies: #002
-Context: Need to track price changes over time to analyze trade performance
-References: None yet
-
-History:
-- [2024-03-19] Created
-- [2024-04-06] Moved to ACTIVE from NEXT (after completion of #002)
-
-Sub-tasks:
-- [ ] Design price update schedule
-- [ ] Implement yfinance integration
-- [ ] Add price history storage
-- [ ] Create basic price tracking reports
-- [ ] Add error handling for missing data
-
 ## ⏩ NEXT
 
 ### [2024-03-19] Add Basic Trade Analysis Features #003
@@ -112,6 +93,33 @@ History:
 - [2024-03-19] Created
 
 ## ✅ COMPLETED
+
+### [2024-03-19] Add Price Service Integration #004
+Status: COMPLETED
+Priority: HIGH
+Owner: @stewo
+Dependencies: #002
+Context: Need real-time price data for trade evaluation and position monitoring
+References: src/services/price_service.py
+
+History:
+- [2024-03-19] Created
+- [2024-04-06] Moved to ACTIVE from NEXT (after completion of #002)
+- [2024-04-06] Revised approach: Simplified to on-demand price fetching instead of historical tracking
+- [2024-04-06] Completed implementation with simplified approach
+
+Completed Sub-tasks:
+- [x] Implement yfinance integration for real-time price data (2024-04-06)
+- [x] Add methods for fetching current underlying prices (2024-04-06)
+- [x] Add option chain data retrieval (2024-04-06)
+- [x] Add error handling for API failures (2024-04-06)
+- [x] Create simple caching layer to prevent excessive API calls (2024-04-06)
+
+Key Decisions:
+- Simplified approach to use on-demand price fetching instead of historical tracking
+- Used yfinance library for market data
+- Implemented LRU caching to prevent excessive API calls
+- Added comprehensive error handling and logging
 
 ### [2024-03-19] Initialize GitHub Repository #007
 Status: COMPLETED

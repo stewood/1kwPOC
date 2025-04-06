@@ -1,6 +1,14 @@
 """
-Database initialization script.
-Creates SQLite database with proper schema.
+Database initialization script for the 1kw POC project.
+
+This module handles the initial setup of the SQLite database, including:
+- Creating the database file if it doesn't exist
+- Setting up the schema using statements from schema.py
+- Enabling SQLite features like foreign key support
+- Setting the schema version
+
+Usage:
+    python -m db.init_db [db_path]
 """
 
 import sqlite3
@@ -9,10 +17,19 @@ from .schema import get_all_statements, SCHEMA_VERSION
 
 def init_db(db_path: str = 'trades.db') -> None:
     """
-    Initialize the database with proper schema.
+    Initialize the SQLite database with the proper schema.
+    
+    This function:
+    1. Creates the database file and parent directories if they don't exist
+    2. Enables SQLite foreign key support
+    3. Creates all required tables, indexes, and triggers
+    4. Sets the schema version
     
     Args:
-        db_path: Path to the SQLite database file
+        db_path (str): Path to the SQLite database file. Defaults to 'trades.db'
+        
+    Raises:
+        sqlite3.Error: If there's an error during database initialization
     """
     db_path = Path(db_path)
     
