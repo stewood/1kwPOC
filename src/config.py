@@ -50,6 +50,8 @@ class Config:
         
         # API Settings
         self.optionsamurai_token = os.getenv("OPTIONSAMURAI_BEARER_TOKEN")
+        self.tradier_token = os.getenv("TRADIER_TOKEN")
+        self.tradier_sandbox = os.getenv("TRADIER_SANDBOX", "true").lower() == "true"
         self.scan_interval = int(os.getenv("SCAN_INTERVAL_SECONDS", "300"))  # 5 minutes default
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
         self.retry_delay = int(os.getenv("RETRY_DELAY_SECONDS", "60"))

@@ -11,6 +11,7 @@ requests>=2.31.0
 pyjwt>=2.8.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0  # for .env file handling
+tradier-python>=0.1.4  # for market data
 
 # Local package in editable mode
 -e ./optionsamurai_api
@@ -18,5 +19,4 @@ python-dotenv>=1.0.0  # for .env file handling
 # Potential Future Dependencies:
 # DBUtils   # For connection pooling if needed
 # sqlalchemy # For ORM or advanced pooling/features
-# pandas    # For data analysis
-# yfinance  # For fetching price history 
+# pandas    # For data analysis 
