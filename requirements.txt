@@ -12,6 +12,8 @@ pyjwt>=2.8.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0  # for .env file handling
 tradier-python>=0.1.4  # for market data
+pytz>=2024.1  # for timezone handling
+uvatradier>=0.1.0  # for Tradier API access
 
 # Local package in editable mode
 -e ./optionsamurai_api

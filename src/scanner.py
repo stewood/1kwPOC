@@ -37,21 +37,29 @@ class ScanManager:
         """
         self.config = config
         self.optionsamurai = OptionSamuraiService()
-        self.price_service = PriceService()
         self.pipeline = DataPipeline()
         self.stop_event = Event()
         self._cache: Dict[int, Dict[str, Any]] = {}
         self._last_scan_times: Dict[int, datetime] = {}
         
-        # Initialize services
+        # Initialize Option Samurai service
         logger.info("🔄 Initializing Option Samurai service...")
         if not self.optionsamurai._client:
             logger.error("❌ Failed to initialize Option Samurai service. Check your API token.")
             raise RuntimeError("Option Samurai service initialization failed")
         logger.info("✅ Option Samurai service initialized successfully")
         
-        logger.info("🔄 Initializing Price service...")
-        logger.info("✅ Price service initialized successfully")
+        # Initialize Price service if Tradier token is available
+        self.price_service = None
+        if self.config.tradier_token:
+            logger.info("🔄 Initializing Price service...")
+            try:
+                self.price_service = PriceService()
+                logger.info("✅ Price service initialized successfully")
+            except ValueError as e:
+                logger.warning(f"⚠️  Price service not initialized: {e}")
+        else:
+            logger.info("ℹ️  Price service disabled (TRADIER_TOKEN not set)")
     
     def start(self):
         """Start the main scanning loop.
@@ -89,14 +97,22 @@ class ScanManager:
         that is due for an update based on cache settings.
         """
         logger.info("📡 Fetching available scans from Option Samurai...")
-        scans = self.optionsamurai.list_scans()
-        logger.info(f"📋 Found {len(scans)} available scans")
+        all_scans = self.optionsamurai.list_scans()
+        if not all_scans:
+            logger.warning("⚠️  No scans available. Please check your Option Samurai account.")
+            return
+            
+        # Filter to only configured scan IDs
+        configured_ids = self.config.get_all_configured_scan_ids()
+        scans = [scan for scan in all_scans if scan.id in configured_ids]
         
         if not scans:
-            logger.warning("⚠️  No scans available. Please create some scans in Option Samurai first.")
+            logger.warning("⚠️  None of the configured scan IDs were found in Option Samurai.")
+            logger.info("Available scan IDs: " + ", ".join(str(s.id) for s in all_scans))
             return
         
-        logger.info("\n🔍 Available scans:")
+        logger.info(f"📋 Found {len(scans)} configured scans")
+        logger.info("\n🔍 Processing scans:")
         for scan in scans:
             logger.info(f"   - {scan.label} (ID: {scan.id})")
         

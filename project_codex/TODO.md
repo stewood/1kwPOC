@@ -56,8 +56,45 @@ Sub-tasks:
 
 ## 🔥 ACTIVE
 
-### [2024-04-06] Implement Option Samurai Integration #008
+### [2024-04-06] Implement Active Trade Status Updates #012
 Status: ACTIVE
+Priority: HIGH
+Owner: @stewo
+Dependencies: #002, #008, #011
+Context: Need to track and update status of active trades using Tradier market data
+References: 
+- [Price Service Implementation](../src/services/price_service.py)
+- [Database Schema](./02_planning/database_schema.md)
+- [Database Manager](../src/database/db_manager.py)
+
+History:
+- [2024-04-06] Created and moved to ACTIVE
+- [2024-04-06] Identified as prerequisite for trade analysis (#003)
+
+Sub-tasks:
+- [ ] Design trade status update workflow
+  - [ ] Define status update frequency
+  - [ ] Determine price thresholds for status changes
+  - [ ] Define logging requirements
+- [ ] Implement database queries
+  - [ ] Query for active trades
+  - [ ] Add trade status update methods
+  - [ ] Add price history tracking
+- [ ] Add Tradier price updates
+  - [ ] Fetch current underlying prices
+  - [ ] Fetch current option prices
+  - [ ] Calculate current position values
+- [ ] Implement status logic
+  - [ ] Add profit/loss calculations
+  - [ ] Add time-based status updates
+  - [ ] Handle expired positions
+- [ ] Add monitoring
+  - [ ] Log status changes
+  - [ ] Track update success/failure
+  - [ ] Monitor API usage
+
+### [2024-04-06] Implement Option Samurai Integration #008
+Status: COMPLETED
 Priority: HIGH
 Owner: @stewo
 Dependencies: #002, #004
@@ -89,8 +126,13 @@ History:
   - Added trade validation
   - Implemented trade storage
   - Added trade status tracking
+- [2024-04-07] Completed implementation and moved to COMPLETED:
+  - Made Tradier token optional
+  - Added specific scan filtering
+  - Enhanced duplicate detection
+  - Verified database integration
 
-Sub-tasks:
+Completed Sub-tasks:
 - [x] Set up Option Samurai API client (2024-04-06)
 - [x] Implement scan result fetching (2024-04-06)
 - [x] Add error handling and logging (2024-04-06)
@@ -101,8 +143,8 @@ Sub-tasks:
   - [x] Implement main scan loop
   - [x] Add summary reporting
 - [x] Add retry logic for API failures (2024-04-06)
-- [ ] Implement results caching
-- [ ] Add rate limit handling
+- [x] Implement results caching (2024-04-07)
+- [x] Add rate limit handling (2024-04-07)
 - [x] Connect scanner to database (2024-04-06)
   - [x] Add trade validation against existing positions (2024-04-06)
   - [x] Implement trade storage (2024-04-06)
@@ -114,7 +156,7 @@ Sub-tasks:
 Status: BACKLOG
 Priority: HIGH
 Owner: @stewo
-Dependencies: #002, #004, #008, #011
+Dependencies: #002, #004, #008, #011, #012
 Context: Need to analyze effectiveness of trade opportunities
 References: None yet
 
@@ -123,6 +165,7 @@ History:
 - [2024-04-06] Moved to NEXT from BACKLOG (after #002 completion)
 - [2024-04-06] Moved back to BACKLOG (needs Option Samurai integration #008 first)
 - [2024-04-06] Added dependency on Tradier integration (#011) for reliable market data
+- [2024-04-06] Added dependency on trade status updates (#012) for accurate analysis
 
 ## 📋 BACKLOG
 
@@ -130,13 +173,14 @@ History:
 Status: BACKLOG
 Priority: MEDIUM
 Owner: @stewo
-Dependencies: #002, #008, #011
+Dependencies: #002, #008, #011, #012
 Context: Need system health monitoring and scan failure alerts
 
 History:
 - [2024-03-19] Created
 - [2024-04-06] Updated dependencies to include #008
 - [2024-04-06] Added dependency on Tradier integration (#011) for market data monitoring
+- [2024-04-06] Added dependency on trade status updates (#012) for alert triggers
 
 ### [2024-03-19] Create Performance Dashboard #006
 Status: BACKLOG
@@ -364,6 +408,10 @@ History:
   - Created test script with sandbox environment
   - Verified functionality for quotes and option chains
 - [2024-04-06] Moved to COMPLETED after successful testing
+- [2024-04-07] Updated implementation:
+  - Made Tradier integration optional for basic scanning
+  - PriceService now initializes as disabled when token not present
+  - Maintained compatibility for future price tracking features
 
 Completed Sub-tasks:
 - [x] Update Configuration (2024-04-06)

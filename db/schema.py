@@ -55,6 +55,63 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 """
 
+CREATE_OPTION_PRICE_TRACKING = """
+CREATE TABLE IF NOT EXISTS option_price_tracking (
+    tracking_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id INTEGER NOT NULL,
+    tracking_date DATE NOT NULL,
+    option_symbol TEXT NOT NULL,
+    
+    -- Price Data
+    bid DECIMAL(10,2),
+    ask DECIMAL(10,2),
+    last DECIMAL(10,2),
+    mark DECIMAL(10,2),
+    
+    -- Size Information
+    bid_size INTEGER,
+    ask_size INTEGER,
+    volume INTEGER,
+    open_interest INTEGER,
+    
+    -- Exchange Information
+    exchange TEXT,
+    
+    -- Timestamps
+    last_update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    greeks_update_time TIMESTAMP,
+    
+    -- Greeks
+    delta DECIMAL(10,4),
+    gamma DECIMAL(10,4),
+    theta DECIMAL(10,4),
+    vega DECIMAL(10,4),
+    rho DECIMAL(10,4),
+    phi DECIMAL(10,4),
+    
+    -- Implied Volatility
+    bid_iv DECIMAL(10,4),
+    mid_iv DECIMAL(10,4),
+    ask_iv DECIMAL(10,4),
+    smv_vol DECIMAL(10,4),
+    
+    -- Contract Details
+    contract_size INTEGER,
+    expiration_type TEXT,
+    
+    -- Market Status
+    is_closing_only BOOLEAN DEFAULT FALSE,
+    is_tradeable BOOLEAN DEFAULT TRUE,
+    is_market_closed BOOLEAN DEFAULT FALSE,
+    
+    -- Record Status
+    is_complete BOOLEAN DEFAULT FALSE,
+    
+    FOREIGN KEY(trade_id) REFERENCES trades(id),
+    CONSTRAINT unique_daily_tracking UNIQUE(trade_id, tracking_date, option_symbol)
+);
+"""
+
 # Indexes
 CREATE_TRADES_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);",
@@ -62,6 +119,12 @@ CREATE_TRADES_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_trades_expiration ON trades(expiration_date);",
     "CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);",
     "CREATE INDEX IF NOT EXISTS idx_trades_strategy ON trades(strategy);"
+]
+
+CREATE_OPTION_PRICE_TRACKING_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_opt_price_trade_date ON option_price_tracking(trade_id, tracking_date);",
+    "CREATE INDEX IF NOT EXISTS idx_opt_price_symbol ON option_price_tracking(option_symbol);",
+    "CREATE INDEX IF NOT EXISTS idx_opt_price_update ON option_price_tracking(last_update_time);"
 ]
 
 # Triggers for updated_at
@@ -90,7 +153,9 @@ def get_all_statements():
     statements = [
         CREATE_SCHEMA_VERSION,
         CREATE_TRADES,
+        CREATE_OPTION_PRICE_TRACKING,
         CREATE_TRADES_TRIGGER
     ]
     statements.extend(CREATE_TRADES_INDEXES)
+    statements.extend(CREATE_OPTION_PRICE_TRACKING_INDEXES)
     return statements

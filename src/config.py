@@ -12,7 +12,7 @@ Provides centralized access to all application settings.
 import os
 import logging.config
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
 # Base paths
@@ -52,6 +52,13 @@ class Config:
         self.optionsamurai_token = os.getenv("OPTIONSAMURAI_BEARER_TOKEN")
         self.tradier_token = os.getenv("TRADIER_TOKEN")
         self.tradier_sandbox = os.getenv("TRADIER_SANDBOX", "true").lower() == "true"
+        
+        # Strategy Scan IDs
+        self.iron_condor_scan_ids = self._parse_scan_ids("IRON_CONDOR_SCAN_IDS")
+        self.bull_call_scan_ids = self._parse_scan_ids("BULL_CALL_SCAN_IDS")
+        self.bear_put_scan_ids = self._parse_scan_ids("BEAR_PUT_SCAN_IDS")
+        
+        # Scanning Settings
         self.scan_interval = int(os.getenv("SCAN_INTERVAL_SECONDS", "300"))  # 5 minutes default
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
         self.retry_delay = int(os.getenv("RETRY_DELAY_SECONDS", "60"))
@@ -68,6 +75,33 @@ class Config:
         self._setup_logging()
         
         self._initialized = True
+    
+    def _parse_scan_ids(self, env_var: str) -> List[int]:
+        """Parse comma-separated scan IDs from environment variable.
+        
+        Args:
+            env_var: Name of environment variable to parse
+            
+        Returns:
+            List of scan IDs as integers
+        """
+        scan_ids_str = os.getenv(env_var, "")
+        if not scan_ids_str:
+            return []
+        return [int(id.strip()) for id in scan_ids_str.split(",") if id.strip()]
+    
+    def get_all_configured_scan_ids(self) -> List[int]:
+        """Get all configured scan IDs across all strategies.
+        
+        Returns:
+            List of unique scan IDs as integers
+        """
+        all_ids = (
+            self.iron_condor_scan_ids +
+            self.bull_call_scan_ids +
+            self.bear_put_scan_ids
+        )
+        return list(set(all_ids))  # Remove any duplicates
     
     def _setup_logging(self):
         """Configure logging for the application."""
@@ -124,5 +158,8 @@ class Config:
             "db_path": self.db_path,
             "cache_duration": self.cache_duration,
             "min_profit_threshold": self.min_profit_threshold,
-            "max_risk_threshold": self.max_risk_threshold
+            "max_risk_threshold": self.max_risk_threshold,
+            "iron_condor_scan_ids": self.iron_condor_scan_ids,
+            "bull_call_scan_ids": self.bull_call_scan_ids,
+            "bear_put_scan_ids": self.bear_put_scan_ids
         } 

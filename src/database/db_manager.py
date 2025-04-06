@@ -31,6 +31,9 @@ class DatabaseManager:
         Args:
             db_path: Optional path to the database file. If None, uses default path.
         """
+        # Keep track of open connections
+        self._connections = []
+        
         # Ensure data directory exists
         self.data_dir = Path('data/db')
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -40,6 +43,15 @@ class DatabaseManager:
         
         # Initialize database
         self.initialize_database()
+    
+    def close(self):
+        """Close all open database connections."""
+        for conn in self._connections:
+            try:
+                conn.close()
+            except Exception as e:
+                logger.error(f"Error closing connection: {e}")
+        self._connections.clear()
     
     @contextmanager
     def get_connection(self):
@@ -51,13 +63,18 @@ class DatabaseManager:
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row  # Allows dictionary access to rows
+            self._connections.append(conn)  # Track this connection
             yield conn
         except sqlite3.Error as e:
             logger.error(f"Database connection error: {e}")
             raise
         finally:
             if conn:
-                conn.close()
+                try:
+                    conn.close()
+                    self._connections.remove(conn)  # Remove from tracked connections
+                except Exception as e:
+                    logger.error(f"Error closing connection: {e}")
     
     def initialize_database(self):
         """Create database tables if they don't exist."""
@@ -126,6 +143,43 @@ class DatabaseManager:
                     new_status TEXT NOT NULL,
                     change_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(trade_id) REFERENCES active_trades(trade_id)
+                )
+                ''')
+                
+                # Create option_price_tracking table
+                conn.execute('''
+                CREATE TABLE IF NOT EXISTS option_price_tracking (
+                    tracking_id INTEGER PRIMARY KEY,
+                    trade_id INTEGER NOT NULL,
+                    tracking_date DATE NOT NULL,
+                    option_symbol TEXT NOT NULL,
+                    bid DECIMAL(10,2),
+                    ask DECIMAL(10,2),
+                    last DECIMAL(10,2),
+                    mark DECIMAL(10,2),
+                    bid_size INTEGER,
+                    ask_size INTEGER,
+                    volume INTEGER,
+                    open_interest INTEGER,
+                    exchange TEXT,
+                    greeks_update_time TIMESTAMP,
+                    delta DECIMAL(10,4),
+                    gamma DECIMAL(10,4),
+                    theta DECIMAL(10,4),
+                    vega DECIMAL(10,4),
+                    rho DECIMAL(10,4),
+                    phi DECIMAL(10,4),
+                    bid_iv DECIMAL(10,4),
+                    mid_iv DECIMAL(10,4),
+                    ask_iv DECIMAL(10,4),
+                    smv_vol DECIMAL(10,4),
+                    contract_size INTEGER,
+                    expiration_type TEXT,
+                    is_closing_only BOOLEAN,
+                    is_tradeable BOOLEAN,
+                    is_market_closed BOOLEAN,
+                    is_complete BOOLEAN DEFAULT FALSE,
+                    last_update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 ''')
                 
@@ -568,4 +622,175 @@ class DatabaseManager:
                 
         except sqlite3.Error as e:
             logger.error(f"Error retrieving trade status history: {e}")
+            raise
+
+    def create_option_price_tracking(self, trade_id: int, option_data: Dict[str, Any]) -> int:
+        """
+        Create a new option price tracking record for a trade.
+        
+        Args:
+            trade_id: ID of the trade to track
+            option_data: Dictionary containing option data from Tradier API
+                Required keys:
+                - option_symbol: OCC option symbol
+                - tracking_date: Date for this tracking record
+                Optional keys (all other fields from Tradier API)
+        
+        Returns:
+            tracking_id: ID of the newly created tracking record
+        """
+        required_fields = {'option_symbol', 'tracking_date'}
+        
+        if missing := required_fields - set(option_data.keys()):
+            raise ValueError(f"Missing required fields: {missing}")
+            
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute('''
+                INSERT INTO option_price_tracking (
+                    trade_id, tracking_date, option_symbol,
+                    bid, ask, last, mark,
+                    bid_size, ask_size, volume, open_interest,
+                    exchange, greeks_update_time,
+                    delta, gamma, theta, vega, rho, phi,
+                    bid_iv, mid_iv, ask_iv, smv_vol,
+                    contract_size, expiration_type,
+                    is_closing_only, is_tradeable, is_market_closed
+                ) VALUES (
+                    :trade_id, :tracking_date, :option_symbol,
+                    :bid, :ask, :last, :mark,
+                    :bid_size, :ask_size, :volume, :open_interest,
+                    :exchange, :greeks_update_time,
+                    :delta, :gamma, :theta, :vega, :rho, :phi,
+                    :bid_iv, :mid_iv, :ask_iv, :smv_vol,
+                    :contract_size, :expiration_type,
+                    :is_closing_only, :is_tradeable, :is_market_closed
+                )
+                ''', {**option_data, 'trade_id': trade_id})
+                
+                tracking_id = cursor.lastrowid
+                conn.commit()
+                logger.info(f"Created price tracking record {tracking_id} for trade {trade_id}")
+                return tracking_id
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error creating price tracking record: {e}")
+            raise
+
+    def update_option_price(self, tracking_id: int, price_data: Dict[str, Any]) -> None:
+        """
+        Update an existing option price tracking record with new data.
+        
+        Args:
+            tracking_id: ID of the tracking record to update
+            price_data: Dictionary containing updated option data
+                Any fields from the option_price_tracking table can be updated
+        """
+        if not price_data:
+            raise ValueError("No price data provided for update")
+            
+        try:
+            # Build the update query dynamically based on provided fields
+            fields = list(price_data.keys())
+            update_fields = [f"{field} = :{field}" for field in fields]
+            update_query = f'''
+            UPDATE option_price_tracking 
+            SET {", ".join(update_fields)}
+            WHERE tracking_id = :tracking_id
+            '''
+            
+            with self.get_connection() as conn:
+                conn.execute(update_query, {**price_data, 'tracking_id': tracking_id})
+                conn.commit()
+                logger.info(f"Updated price tracking record {tracking_id}")
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error updating price tracking record: {e}")
+            raise
+
+    def get_option_price_history(self, trade_id: int, start_date: Optional[str] = None,
+                               end_date: Optional[str] = None) -> List[Dict]:
+        """
+        Get price history for options in a trade.
+        
+        Args:
+            trade_id: ID of the trade
+            start_date: Optional start date in YYYY-MM-DD format
+            end_date: Optional end date in YYYY-MM-DD format
+        
+        Returns:
+            List of price tracking records
+        """
+        try:
+            with self.get_connection() as conn:
+                query = '''
+                SELECT * FROM option_price_tracking
+                WHERE trade_id = ?
+                '''
+                params = [trade_id]
+                
+                if start_date:
+                    query += ' AND tracking_date >= ?'
+                    params.append(start_date)
+                if end_date:
+                    query += ' AND tracking_date <= ?'
+                    params.append(end_date)
+                    
+                query += ' ORDER BY tracking_date ASC, last_update_time ASC'
+                
+                cursor = conn.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error retrieving option price history: {e}")
+            raise
+
+    def mark_tracking_complete(self, tracking_id: int) -> None:
+        """
+        Mark a price tracking record as complete (e.g., at market close).
+        
+        Args:
+            tracking_id: ID of the tracking record to mark complete
+        """
+        try:
+            with self.get_connection() as conn:
+                conn.execute('''
+                UPDATE option_price_tracking
+                SET is_complete = TRUE,
+                    is_market_closed = TRUE
+                WHERE tracking_id = ?
+                ''', (tracking_id,))
+                conn.commit()
+                logger.info(f"Marked price tracking record {tracking_id} as complete")
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error marking tracking record as complete: {e}")
+            raise
+
+    def get_active_price_tracking(self, trade_id: int) -> Optional[Dict]:
+        """
+        Get the most recent price tracking record for a trade.
+        
+        Args:
+            trade_id: ID of the trade
+        
+        Returns:
+            Most recent tracking record or None if not found
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute('''
+                SELECT * FROM option_price_tracking
+                WHERE trade_id = ?
+                AND tracking_date = DATE('now')
+                AND NOT is_complete
+                ORDER BY last_update_time DESC
+                LIMIT 1
+                ''', (trade_id,))
+                
+                row = cursor.fetchone()
+                return dict(row) if row else None
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error retrieving active price tracking: {e}")
             raise 
