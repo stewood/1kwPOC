@@ -1,0 +1,16 @@
+# Project Dependencies
+
+# This file lists the Python packages required for this project.
+# Install dependencies using: pip install -r requirements.txt
+
+# Core Libraries (typically built-in, listed for clarity)
+# sqlite3  # Standard library for SQLite database access
+
+# Required Dependencies
+requests  # For making HTTP requests (e.g., to Option Samurai API)
+
+# Potential Future Dependencies:
+# DBUtils   # For connection pooling if needed
+# sqlalchemy # For ORM or advanced pooling/features
+# pandas    # For data analysis
+# yfinance  # For fetching price history 
