@@ -1,5 +1,5 @@
 """
-1kw POC Project Source Code
+Source package for Option Samurai trade automation
 
 This package contains the main implementation of the 1kw POC project,
 a system for analyzing and tracking options trading opportunities from

@@ -18,6 +18,7 @@ from threading import Event
 from .config import Config
 from .services.optionsamurai_service import OptionSamuraiService
 from .services.price_service import PriceService
+from .pipeline import DataPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class ScanManager:
         self.config = config
         self.optionsamurai = OptionSamuraiService()
         self.price_service = PriceService()
+        self.pipeline = DataPipeline()
         self.stop_event = Event()
         self._cache: Dict[int, Dict[str, Any]] = {}
         self._last_scan_times: Dict[int, datetime] = {}
@@ -109,7 +111,20 @@ class ScanManager:
             
             try:
                 logger.info(f"\n🎯 Processing scan: {scan_label}")
-                self._execute_scan(scan_id, scan_label)
+                results = self.optionsamurai.run_scan(scan_id)
+                if not results:
+                    logger.warning(f"⚠️  No results from scan '{scan_label}'")
+                    continue
+                
+                # Process results through pipeline
+                trade_ids = self.pipeline.process_scan_results(results, scan_label)
+                
+                # Update cache with processed results
+                self._cache[scan_id] = results
+                self._last_scan_times[scan_id] = datetime.now()
+                
+                logger.info(f"✅ Processed scan '{scan_label}' - stored {len(trade_ids)} new trades")
+                
             except Exception as e:
                 logger.error(f"❌ Error executing scan '{scan_label}': {e}", exc_info=True)
     
@@ -120,91 +135,4 @@ class ScanManager:
             return True
             
         cache_expiry = timedelta(minutes=self.config.cache_duration)
-        return datetime.now() - last_scan > cache_expiry
-    
-    def _execute_scan(self, scan_id: int, scan_label: str):
-        """Execute a single scan and process its results."""
-        logger.info(f"🔄 Executing scan '{scan_label}'...")
-        
-        retries = 0
-        while retries < self.config.max_retries:
-            try:
-                results = self.optionsamurai.run_scan(scan_id)
-                if not results:
-                    logger.warning(f"⚠️  No results from scan '{scan_label}'")
-                    return
-                
-                # Process and validate results
-                valid_trades = self._process_scan_results(results)
-                logger.info(f"✅ Found {len(valid_trades)} valid trades from '{scan_label}'")
-                
-                if valid_trades:
-                    logger.info("\n💡 Valid trade opportunities:")
-                    for trade in valid_trades:
-                        logger.info(f"   - {trade.get('symbol')}: {trade.get('strategy', 'Unknown strategy')}")
-                        logger.info(f"     Max Profit: ${trade.get('maxProfit', 0):.2f}")
-                        logger.info(f"     Max Risk: ${trade.get('maxRisk', 0):.2f}")
-                        logger.info(f"     Current Price: ${trade.get('underlyingPrice', 0):.2f}")
-                
-                # Update cache
-                self._cache[scan_id] = valid_trades
-                self._last_scan_times[scan_id] = datetime.now()
-                return
-                
-            except Exception as e:
-                retries += 1
-                if retries < self.config.max_retries:
-                    logger.warning(f"⚠️  Retry {retries} for '{scan_label}': {e}")
-                    time.sleep(self.config.retry_delay)
-                else:
-                    logger.error(f"❌ Failed to execute '{scan_label}' after {retries} retries")
-                    raise
-    
-    def _process_scan_results(self, results: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Process and validate scan results."""
-        valid_trades = []
-        items = results.get('items', [])
-        total_trades = len(items)
-        logger.info(f"📊 Processing {total_trades} potential trades...")
-        
-        for i, trade in enumerate(items, 1):
-            symbol = trade.get('symbol', 'Unknown')
-            logger.debug(f"Checking trade {i}/{total_trades}: {symbol}")
-            
-            # Skip if profit is below threshold
-            max_profit = trade.get('maxProfit', 0)
-            if max_profit < self.config.min_profit_threshold:
-                logger.debug(f"   ⚠️  {symbol}: Profit ${max_profit:.2f} below threshold ${self.config.min_profit_threshold:.2f}")
-                continue
-            
-            # Skip if risk is above threshold
-            max_risk = trade.get('maxRisk', 1)
-            if max_risk > self.config.max_risk_threshold:
-                logger.debug(f"   ⚠️  {symbol}: Risk ${max_risk:.2f} above threshold ${self.config.max_risk_threshold:.2f}")
-                continue
-            
-            # Verify current prices
-            if not symbol or symbol == 'Unknown':
-                continue
-            
-            try:
-                current_price = self.price_service.get_current_price(symbol)
-                scan_price = trade.get('underlyingPrice', 0)
-                
-                if current_price is None:
-                    logger.warning(f"   ⚠️  {symbol}: Could not fetch current price")
-                    continue
-                
-                # Skip if price has moved significantly
-                if abs(current_price - scan_price) / scan_price > 0.01:  # 1% threshold
-                    logger.debug(f"   ⚠️  {symbol}: Price moved {abs(current_price - scan_price) / scan_price:.1%}")
-                    continue
-                
-                logger.debug(f"   ✅ {symbol}: Trade validated")
-                valid_trades.append(trade)
-                
-            except Exception as e:
-                logger.warning(f"   ❌ {symbol}: Error verifying price: {e}")
-                continue
-        
-        return valid_trades 
+        return datetime.now() - last_scan > cache_expiry 
