@@ -40,6 +40,10 @@ credentials.json
 *.log
 local-research/
 local-docs/
+data/db/*
+!data/db/.gitkeep
+logs/*
+!logs/.gitkeep
 
 # OS specific
 .DS_Store
