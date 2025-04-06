@@ -56,70 +56,147 @@ Sub-tasks:
 
 ## 🔥 ACTIVE
 
-## ⏩ NEXT
-
-### [2024-03-19] Add Basic Trade Analysis Features #003
-Status: NEXT
+### [2024-04-06] Implement Option Samurai Integration #008
+Status: ACTIVE
 Priority: HIGH
 Owner: @stewo
 Dependencies: #002, #004
+Context: Need to fetch and store daily scan results from Option Samurai API
+References: 
+- [Option Samurai Scans](./option_samurai_scans.md)
+- [Test Implementation](../tests/test_optionsamurai_service.py)
+- [Service Implementation](../src/services/optionsamurai_service.py)
+
+History:
+- [2024-04-06] Created and moved to NEXT
+- [2024-04-06] Moved to ACTIVE
+- [2024-04-06] Completed initial API integration:
+  - Set up Option Samurai API client
+  - Implemented scan result fetching
+  - Added error handling and logging
+  - Created comprehensive documentation
+  - Added example scan results
+- [2024-04-06] Updated sub-tasks to focus on main entry point implementation
+
+Sub-tasks:
+- [x] Set up Option Samurai API client (2024-04-06)
+- [x] Implement scan result fetching (2024-04-06)
+- [x] Add error handling and logging (2024-04-06)
+- [x] Document API response structure (2024-04-06)
+- [ ] Create main.py entry point
+  - [ ] Initialize required services
+  - [ ] Set up configuration management
+  - [ ] Implement main scan loop
+  - [ ] Add summary reporting
+- [ ] Add retry logic for API failures
+- [ ] Implement results caching
+- [ ] Add rate limit handling
+
+## ⏩ NEXT
+
+### [2024-04-06] Create Data Pipeline for Scan Results #009
+Status: NEXT
+Priority: HIGH
+Owner: @stewo
+Dependencies: #002, #008
+Context: Need to transform and store Option Samurai scan results in our database
+References: 
+- [Database Schema](./02_planning/database_schema.md)
+- [Option Samurai Scans](./option_samurai_scans.md)
+
+History:
+- [2024-04-06] Created and moved to NEXT
+- [2024-04-06] Updated tasks to reflect data pipeline requirements
+
+Sub-tasks:
+- [ ] Design data transformations
+  - [ ] Map API fields to database schema
+  - [ ] Handle multi-leg trade splitting
+  - [ ] Convert date/time formats
+  - [ ] Calculate derived fields
+- [ ] Implement database operations
+  - [ ] Create duplicate detection logic
+  - [ ] Add batch insert functionality
+  - [ ] Implement trade updates
+- [ ] Add data validation
+  - [ ] Validate required fields
+  - [ ] Check data types and ranges
+  - [ ] Verify calculations
+- [ ] Create error handling
+  - [ ] Handle transformation errors
+  - [ ] Handle database errors
+  - [ ] Add detailed logging
+- [ ] Add performance monitoring
+  - [ ] Track transformation times
+  - [ ] Monitor database operations
+  - [ ] Generate statistics
+
+### [2024-04-06] Add Configuration Management #010
+Status: NEXT
+Priority: HIGH
+Owner: @stewo
+Dependencies: #008, #009
+Context: Need centralized configuration for services and settings
+References: None yet
+
+History:
+- [2024-04-06] Created and moved to NEXT
+
+Sub-tasks:
+- [ ] Create configuration structure
+  - [ ] API credentials management
+  - [ ] Database settings
+  - [ ] Scan parameters
+  - [ ] Logging settings
+- [ ] Implement configuration loading
+  - [ ] Environment variables
+  - [ ] Config files
+  - [ ] Command line arguments
+- [ ] Add validation
+  - [ ] Required settings check
+  - [ ] Format validation
+  - [ ] Cross-dependency validation
+- [ ] Create documentation
+  - [ ] Configuration options
+  - [ ] Example configurations
+  - [ ] Deployment guide
+
+## 📋 BACKLOG
+
+### [2024-03-19] Add Basic Trade Analysis Features #003
+Status: BACKLOG
+Priority: HIGH
+Owner: @stewo
+Dependencies: #002, #004, #008
 Context: Need to analyze effectiveness of trade opportunities
 References: None yet
 
 History:
 - [2024-03-19] Created
 - [2024-04-06] Moved to NEXT from BACKLOG (after #002 completion)
-
-## 📋 BACKLOG
+- [2024-04-06] Moved back to BACKLOG (needs Option Samurai integration #008 first)
 
 ### [2024-03-19] Add Monitoring and Alerts #005
 Status: BACKLOG
 Priority: MEDIUM
 Owner: @stewo
-Dependencies: #002
+Dependencies: #002, #008
 Context: Need system health monitoring and scan failure alerts
 
 History:
 - [2024-03-19] Created
+- [2024-04-06] Updated dependencies to include #008
 
 ### [2024-03-19] Create Performance Dashboard #006
 Status: BACKLOG
 Priority: LOW
 Owner: @stewo
-Dependencies: #002, #003
+Dependencies: #002, #003, #008
 Context: Need visual representation of trade performance
 
 History:
 - [2024-03-19] Created
-
-## ✅ COMPLETED
-
-### [2024-03-19] Add Price Service Integration #004
-Status: COMPLETED
-Priority: HIGH
-Owner: @stewo
-Dependencies: #002
-Context: Need real-time price data for trade evaluation and position monitoring
-References: src/services/price_service.py
-
-History:
-- [2024-03-19] Created
-- [2024-04-06] Moved to ACTIVE from NEXT (after completion of #002)
-- [2024-04-06] Revised approach: Simplified to on-demand price fetching instead of historical tracking
-- [2024-04-06] Completed implementation with simplified approach
-
-Completed Sub-tasks:
-- [x] Implement yfinance integration for real-time price data (2024-04-06)
-- [x] Add methods for fetching current underlying prices (2024-04-06)
-- [x] Add option chain data retrieval (2024-04-06)
-- [x] Add error handling for API failures (2024-04-06)
-- [x] Create simple caching layer to prevent excessive API calls (2024-04-06)
-
-Key Decisions:
-- Simplified approach to use on-demand price fetching instead of historical tracking
-- Used yfinance library for market data
-- Implemented LRU caching to prevent excessive API calls
-- Added comprehensive error handling and logging
+- [2024-04-06] Updated dependencies to include #003 and #008
 
 ### [2024-03-19] Initialize GitHub Repository #007
 Status: COMPLETED
@@ -204,6 +281,35 @@ Completed Sub-tasks:
   - [x] Add error handling
   - [x] Implement logging
 - [x] Write example usage and documentation (2024-04-06)
+
+## ✅ COMPLETED
+
+### [2024-03-19] Add Price Service Integration #004
+Status: COMPLETED
+Priority: HIGH
+Owner: @stewo
+Dependencies: #002
+Context: Need real-time price data for trade evaluation and position monitoring
+References: src/services/price_service.py
+
+History:
+- [2024-03-19] Created
+- [2024-04-06] Moved to ACTIVE from NEXT (after completion of #002)
+- [2024-04-06] Revised approach: Simplified to on-demand price fetching instead of historical tracking
+- [2024-04-06] Completed implementation with simplified approach
+
+Completed Sub-tasks:
+- [x] Implement yfinance integration for real-time price data (2024-04-06)
+- [x] Add methods for fetching current underlying prices (2024-04-06)
+- [x] Add option chain data retrieval (2024-04-06)
+- [x] Add error handling for API failures (2024-04-06)
+- [x] Create simple caching layer to prevent excessive API calls (2024-04-06)
+
+Key Decisions:
+- Simplified approach to use on-demand price fetching instead of historical tracking
+- Used yfinance library for market data
+- Implemented LRU caching to prevent excessive API calls
+- Added comprehensive error handling and logging
 
 ## ❌ REMOVED
 
