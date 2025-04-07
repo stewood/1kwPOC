@@ -248,7 +248,7 @@ class ReportDataCollector:
         # PnL = (Net Entry Credit per contract) - (Current net cost to close per contract)
         # Note: current_legs_value is already net (short legs are negative, long are positive)
         # so current net cost to close is -current_legs_value
-        pnl_per_contract = net_entry_credit_per_contract - (-current_legs_value)
+        pnl_per_contract = -net_entry_credit_per_contract + current_legs_value
         total_pnl = pnl_per_contract * total_contracts * 100 # Multiply by 100 for contract size
 
         # Calculate PnL percentage based on Max Risk if possible, otherwise Entry Credit

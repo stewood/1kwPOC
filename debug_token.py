@@ -1,87 +1,56 @@
-#!/usr/bin/env python3
-"""
-Debug the token expiration issue
-"""
+import logging
+from src.database.db_manager import DatabaseManager
 
-import os
-import sys
-import json
-import base64
-from datetime import datetime, timezone
-from dotenv import load_dotenv
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def decode_token_payload(token):
-    """Decode the payload part of a JWT token without validation."""
-    # Remove 'Bearer ' prefix if present
-    if token.startswith('Bearer '):
-        token = token[7:]
-    
-    # Split the token parts
-    parts = token.split('.')
-    if len(parts) != 3:
-        return None
-    
-    # Decode the payload (second part)
-    payload_b64 = parts[1]
-    # Add padding if needed
-    payload_b64 += '=' * (-len(payload_b64) % 4)
-    
+def debug_missing_price_data():
+    db_manager = DatabaseManager()
     try:
-        payload_json = base64.b64decode(payload_b64.replace('-', '+').replace('_', '/'))
-        return json.loads(payload_json)
-    except Exception as e:
-        print(f"Error decoding payload: {e}")
-        return None
+        active_trades = db_manager.get_active_trades()
+        logger.info(f"Number of active trades: {len(active_trades)}")
+        
+        missing_price_data_count = 0
+        for trade in active_trades:
+            trade_id = trade.get('trade_id')
+            trade_type = trade.get('trade_type')
+            
+            leg_definitions = {
+                'BULL_PUT': ['short_put_symbol', 'long_put_symbol'],
+                'BEAR_CALL': ['short_call_symbol', 'long_call_symbol'],
+                'IRON_CONDOR': ['short_put_symbol', 'long_put_symbol', 'short_call_symbol', 'long_call_symbol']
+            }
+            
+            if trade_type not in leg_definitions:
+                logger.warning(f"Unknown trade type: {trade_type} for trade_id: {trade_id}")
+                continue
+                
+            option_symbols = []
+            for symbol_field in leg_definitions[trade_type]:
+                symbol = trade.get(symbol_field)
+                if symbol:
+                    option_symbols.append(symbol)
+                    
+            for option_symbol in option_symbols:
+                latest_price_data = db_manager.get_latest_option_price_data(option_symbol)
+                if not latest_price_data:
+                    logger.warning(f"No price data found for symbol: {option_symbol} in trade_id: {trade_id}")
+                    missing_price_data_count += 1
+                else:
+                    mark_price = latest_price_data.get('mark')
+                    last_price = latest_price_data.get('last')
+                    bid_price = latest_price_data.get('bid')
+                    ask_price = latest_price_data.get('ask')
+                    if not any([mark_price, last_price, bid_price, ask_price]):
+                        logger.warning(f"No valid price (mark, last, bid, ask) found for symbol: {option_symbol} in trade_id: {trade_id}")
+                        missing_price_data_count += 1
 
-def main():
-    # Load token from .env
-    load_dotenv()
-    token = os.getenv("OPTIONSAMURAI_BEARER_TOKEN")
-    
-    if not token:
-        print("Token not found in environment variables!")
-        return
-    
-    # Print token prefix
-    print(f"Token prefix: {token[:20]}...")
-    
-    # Decode the payload
-    payload = decode_token_payload(token)
-    if not payload:
-        print("Failed to decode token payload!")
-        return
-    
-    # Check token claims
-    iss = payload.get('iss')
-    sub = payload.get('sub')
-    iat = payload.get('iat')
-    exp = payload.get('exp')
-    
-    print(f"Issuer (iss): {iss}")
-    print(f"Subject (sub): {sub}")
-    
-    # Detailed expiration information
-    if iat:
-        issued_at = datetime.fromtimestamp(iat, timezone.utc)
-        print(f"Issued at (iat): {iat} ({issued_at.isoformat()})")
-    else:
-        print("Issued at (iat): Not found in token!")
-    
-    if exp:
-        expires_at = datetime.fromtimestamp(exp, timezone.utc)
-        print(f"Expires at (exp): {exp} ({expires_at.isoformat()})")
-        
-        # Check if token is expired
-        current_time = datetime.now(timezone.utc)
-        print(f"Current UTC time: {int(current_time.timestamp())} ({current_time.isoformat()})")
-        
-        if current_time > expires_at:
-            print("❌ TOKEN IS EXPIRED!")
-        else:
-            print("✅ TOKEN IS VALID (not expired)")
-            print(f"Time until expiration: {expires_at - current_time}")
-    else:
-        print("Expires at (exp): Not found in token!")
+        logger.info(f"Total missing price data count: {missing_price_data_count}")
+
+    except Exception as e:
+        logger.error(f"Error in debug_missing_price_data: {e}", exc_info=True)
+    finally:
+        db_manager.close()
 
 if __name__ == "__main__":
-    main() 
+    debug_missing_price_data()

@@ -24,19 +24,28 @@ from .pipeline.data_pipeline import DataPipeline
 from .reporting import ReportingService
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/app.log'),
-        logging.StreamHandler()
-    ]
-)
+# Logging is configured in config.py
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.FileHandler('logs/app.log'),
+#         logging.StreamHandler()
+#     ]
+# )
 
 logger = logging.getLogger(__name__)
 
 class Application:
-    """Main application class."""
+    """
+    Main application class.
+
+    This class is the entry point of the application and is responsible for:
+    - Initializing and configuring all application components (Config, DatabaseManager, Scanner, Pipeline, Services).
+    - Setting up signal handlers for graceful shutdown.
+    - Starting and stopping the main application loop.
+    - Generating end-of-run reports.
+    """
     
     def __init__(self):
         """Initialize the application components."""

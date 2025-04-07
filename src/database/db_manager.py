@@ -808,7 +808,7 @@ class DatabaseManager:
             SELECT * 
             FROM option_price_tracking 
             WHERE option_symbol = ? 
-            ORDER BY tracking_id DESC -- Assuming higher ID means later record
+            ORDER BY last_update_time DESC -- Use the timestamp for latest record
             LIMIT 1
         """
         try:

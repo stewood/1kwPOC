@@ -73,19 +73,19 @@ class HTMLReportGenerator:
             for trade in strategy.trades:
                 if trade.pnl <= -100:
                     buckets['-100'] += 1
-                elif trade.pnl <= -75:
+                elif trade.pnl < -75:
                     buckets['-75'] += 1
-                elif trade.pnl <= -50:
+                elif trade.pnl < -50:
                     buckets['-50'] += 1
-                elif trade.pnl <= -25:
+                elif trade.pnl < -25:
                     buckets['-25'] += 1
-                elif trade.pnl <= 0:
+                elif trade.pnl < 0:
                     buckets['0'] += 1
-                elif trade.pnl <= 25:
+                elif trade.pnl < 25:
                     buckets['25'] += 1
-                elif trade.pnl <= 50:
+                elif trade.pnl < 50:
                     buckets['50'] += 1
-                elif trade.pnl <= 75:
+                elif trade.pnl < 75:
                     buckets['75'] += 1
                 else:
                     buckets['100'] += 1

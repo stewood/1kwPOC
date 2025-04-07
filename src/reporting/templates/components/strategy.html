@@ -38,7 +38,16 @@
             </thead>
             <tbody>
                 {% for trade in strategy.trades %}
-                    <tr class="{% if trade.days_left <= warning_thresholds.days_left %}expiring-soon{% elif trade.pnl_percent >= warning_thresholds.high_profit_pct %}high-profit{% elif trade.pnl_percent <= warning_thresholds.high_loss_pct %}high-loss{% endif %}">
+                    <tr class="
+                        {% if trade.pnl > 0 %}
+                            profitable-row
+                        {% elif trade.pnl < 0 %}
+                            unprofitable-row
+                        {% endif %}
+                        {% if trade.days_left <= warning_thresholds.days_left %} expiring-soon{% endif %}
+                        {% if trade.pnl_percent >= warning_thresholds.high_profit_pct %} high-profit{% endif %}
+                        {% if trade.pnl_percent <= warning_thresholds.high_loss_pct %} high-loss{% endif %}
+                    ">
                         <td>{{ trade.symbol }}</td>
                         <td>{{ trade.expiration|format_date }}</td>
                         <td>{{ trade.days_left }}</td>
