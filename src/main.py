@@ -173,6 +173,11 @@ def main():
         action='store_true',
         help='Update current market prices for options in active trades using Tradier and store them, then exit.'
     )
+    parser.add_argument(
+        '--generate-report',
+        action='store_true',
+        help='Generate the end-of-run P&L report based on database data and current prices, then exit.'
+    )
     args = parser.parse_args()
     # --- End Argument Parsing --- 
     
@@ -271,6 +276,56 @@ def main():
             # No specific shutdown needed for PriceService or PriceTrackingService
         logger.info("--- Price Update Complete --- Exiting.")
         sys.exit(0) # Exit after updating prices
+
+    elif args.generate_report:
+        logger.info("--- Report Generation Mode (--generate-report) ---")
+        db_manager = None
+        price_service = None
+        reporting_service = None
+        try:
+            logger.info("Initializing Config...")
+            config = Config()
+            
+            # Check for Tradier token (needed for PriceService dependency)
+            if not config.tradier_token:
+                logger.error("❌ TRADIER_TOKEN not found. Report generation requires current prices via PriceService.")
+                sys.exit(1)
+            logger.info("✅ Tradier token found.")
+
+            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
+            db_manager = DatabaseManager(db_path=config.db_path)
+            
+            logger.info("Initializing PriceService...")
+            try:
+                price_service = PriceService() 
+                logger.info("✅ PriceService initialized.")
+            except ValueError as e:
+                 logger.error(f"❌ Failed to initialize PriceService: {e}")
+                 sys.exit(1)
+
+            logger.info("Initializing ReportingService...")
+            reporting_service = ReportingService(
+                db_manager=db_manager, 
+                price_service=price_service,
+                config=config # Pass config as it might be used for report settings
+            )
+            logger.info("✅ ReportingService initialized.")
+
+            logger.info("📊 Generating end-of-run report...")
+            # Assuming generate_end_of_run_report uses a default output dir or one from config
+            report_path = reporting_service.generate_end_of_run_report() 
+            logger.info(f"✅ Report generated successfully: {report_path}")
+
+        except Exception as e:
+            logger.error(f"❌ Error during report generation: {e}", exc_info=True)
+            sys.exit(1)
+        finally:
+            if db_manager:
+                logger.info("Closing database manager...")
+                db_manager.close()
+            # No specific shutdown needed for PriceService or ReportingService
+        logger.info("--- Report Generation Complete --- Exiting.")
+        sys.exit(0) # Exit after generating report
 
     else:
         # --- Normal Application Flow --- 
