@@ -77,7 +77,9 @@ class OptionSamuraiService:
             
         try:
             scan_list = self._client.get_scans()
-            return scan_list.saved
+            # Combine predefined and saved scans
+            all_scans = (scan_list.predefined or []) + (scan_list.saved or [])
+            return all_scans
         except Exception as e:
             print(f"Error listing scans: {e}")
             return []
