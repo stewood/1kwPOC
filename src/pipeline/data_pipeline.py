@@ -148,9 +148,9 @@ class DataPipeline:
         Raises:
             ValueError: If required fields are missing or invalid
         """
-        symbol = api_data.get('name')
+        symbol = api_data.get('underlying')
         if not symbol:
-            raise ValueError("Missing required field: symbol")
+            raise ValueError("Missing required field: underlying (ticker symbol)")
             
         # Get current price and validate
         current_price = api_data.get('stock_last')

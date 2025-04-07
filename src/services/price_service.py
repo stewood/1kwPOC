@@ -6,11 +6,11 @@ using the Tradier API. It includes basic caching to prevent excessive API calls.
 """
 
 import logging
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from datetime import datetime, timedelta
 from functools import lru_cache
-import pandas as pd
-from uvatradier import Quotes, OptionsData
+import re
+from .tradier_client import TradierClient
 from ..config import Config
 
 # Configure logging
@@ -33,150 +33,195 @@ class PriceService:
         if not self.config.tradier_token:
             raise ValueError("TRADIER_TOKEN environment variable not set")
             
-        logger.debug("Initializing Tradier clients...")
-        # Initialize Tradier clients
-        self.quotes = Quotes(None, self.config.tradier_token)
-        self.options = OptionsData(None, self.config.tradier_token)
-        logger.debug("Tradier clients initialized successfully")
+        logger.debug("Initializing Tradier client...")
+        self.client = TradierClient(
+            token=self.config.tradier_token,
+            use_sandbox=self.config.tradier_sandbox
+        )
+        logger.debug("Tradier client initialized successfully")
     
-    @lru_cache(maxsize=100)
     def get_current_price(self, symbol: str) -> Optional[float]:
-        """
-        Get the current price for a symbol.
-        Uses LRU cache to prevent excessive API calls.
+        """Get current price for a symbol.
         
         Args:
-            symbol (str): The stock symbol to get price for
+            symbol: Stock symbol to get price for
             
         Returns:
-            Optional[float]: Current price or None if unavailable
-            
-        Raises:
-            ValueError: If symbol is invalid
+            Current price or None if not available
         """
         try:
-            logger.debug(f"Fetching quote for {symbol}...")
-            quote_df = self.quotes.get_quote_day(symbol)
-            logger.debug(f"Quote data received for {symbol}: {quote_df}")
-            
-            if quote_df.empty:
-                logger.error(f"No quote data returned for {symbol}")
-                return None
-                
-            # Extract the last price from the quote DataFrame
-            price = float(quote_df['last'].iloc[0])
-            logger.debug(f"Extracted price for {symbol}: ${price}")
-            return price
+            response = self.client.get_quotes([symbol])
+            if 'quotes' in response and 'quote' in response['quotes']:
+                quote = response['quotes']['quote']
+                if isinstance(quote, list):
+                    quote = quote[0]  # Take first quote if multiple returned
+                return float(quote.get('last', 0))
+            return None
         except Exception as e:
-            logger.error(f"Error fetching price for {symbol}: {e}", exc_info=True)
+            logger.error(f"Error getting price for {symbol}: {str(e)}")
             return None
     
-    def get_current_prices(self, symbols: List[str]) -> Dict[str, float]:
-        """
-        Get current prices for multiple symbols.
+    def get_current_prices(self, symbols: List[str]) -> Dict[str, Optional[float]]:
+        """Get current prices for multiple symbols.
         
         Args:
-            symbols (List[str]): List of stock symbols
+            symbols: List of stock symbols
             
         Returns:
-            Dict[str, float]: Dictionary of symbol -> price mappings
+            Dictionary mapping symbols to their current prices
         """
         try:
-            logger.debug(f"Fetching quotes for {symbols}...")
-            quotes_df = self.quotes.get_quote_data(symbols)
-            logger.debug(f"Quote data received: {quotes_df}")
-            
-            if quotes_df.empty:
-                logger.error("No quote data returned")
-                return {symbol: None for symbol in symbols}
-            
-            # Format response
-            result = {
-                symbol: float(row['last'])
-                for symbol, row in quotes_df.iterrows()
-                if pd.notna(row['last'])
-            }
-            logger.debug(f"Formatted prices: {result}")
-            return result
+            response = self.client.get_quotes(symbols)
+            prices = {}
+            if 'quotes' in response and 'quote' in response['quotes']:
+                quotes = response['quotes']['quote']
+                if not isinstance(quotes, list):
+                    quotes = [quotes]  # Handle single quote case
+                for quote in quotes:
+                    symbol = quote.get('symbol')
+                    if symbol:
+                        prices[symbol] = float(quote.get('last', 0))
+            return prices
         except Exception as e:
-            logger.error(f"Error fetching prices for {symbols}: {e}", exc_info=True)
+            logger.error(f"Error getting prices: {str(e)}")
             return {symbol: None for symbol in symbols}
     
-    def get_option_chain(self, symbol: str, expiration_date: Optional[str] = None) -> Optional[Dict]:
-        """
-        Get option chain data for a symbol and expiration date.
+    def get_option_data(self, option_symbol: str) -> Optional[Dict[str, Any]]:
+        """Get current option data from Tradier.
         
         Args:
-            symbol (str): The stock symbol
-            expiration_date (str, optional): Option expiration date in YYYY-MM-DD format.
-                                           If None, uses the first available expiration.
+            option_symbol: OCC option symbol (e.g., 'MSFT250516C00340000')
             
         Returns:
-            Optional[Dict]: Option chain data or None if unavailable
+            Dictionary containing option data or None if not available
         """
         try:
-            # Get available expirations if none provided
-            if not expiration_date:
-                logger.debug(f"Fetching expiration dates for {symbol}...")
-                expirations = self.options.get_expiry_dates(symbol)
-                logger.debug(f"Expiration dates received: {expirations}")
-                
-                if not isinstance(expirations, list):
-                    expirations = expirations.tolist()
-                
-                if not expirations:  # Check if list is empty
-                    logger.error(f"No option expirations available for {symbol}")
-                    return None
-                expiration_date = expirations[0]  # Get first expiration date
-                logger.debug(f"Selected expiration date: {expiration_date}")
+            logger.info(f"\n🔍 Processing option symbol: {option_symbol}")
             
-            # Get option chain
-            logger.debug(f"Fetching option chain for {symbol}...")
-            chain_df = self.options.get_chain_day(symbol)
-            logger.debug(f"Option chain received: {chain_df}")
+            # Extract ticker and option details using regex
+            # Format: SYMBOL + YYMMDD + [C|P] + STRIKE
+            match = re.match(r'^([A-Z]+)(\d{6})([CP])(\d+)$', option_symbol)
+            if not match:
+                logger.error(f"  ❌ Could not parse option symbol: {option_symbol}")
+                logger.error(f"  • Expected format: SYMBOL + YYMMDD + [C|P] + STRIKE")
+                return None
+                
+            ticker, date_str, option_type, strike_str = match.groups()
             
-            if chain_df.empty:
-                logger.error(f"No option chain data for {symbol} at {expiration_date}")
+            # Format date from YYMMDD to YYYY-MM-DD
+            year = int("20" + date_str[0:2])
+            month = int(date_str[2:4])
+            day = int(date_str[4:6])
+            expiration_date = f"{year}-{month:02d}-{day:02d}"
+            
+            # Convert strike string to decimal
+            strike = float(strike_str) / 1000
+            
+            logger.info(f"  📅 Parsed option details:")
+            logger.info(f"    • Ticker: {ticker}")
+            logger.info(f"    • Expiration: {expiration_date}")
+            logger.info(f"    • Type: {'Call' if option_type == 'C' else 'Put'}")
+            logger.info(f"    • Strike: ${strike:.2f}")
+            
+            # Get market status
+            market_status = self.client.get_market_clock()
+            
+            # Get option chain for the expiration date
+            logger.info(f"  🌐 Fetching option chain for {ticker}...")
+            chain_response = self.client.get_option_chains(ticker, expiration_date)
+            
+            if not chain_response.get('options', {}).get('option'):
+                logger.error(f"  ❌ No option chain data available for {ticker}")
                 return None
             
-            # Convert DataFrame to dictionary format
-            chain_dict = chain_df.to_dict('records')
+            # Find our specific option in the chain
+            chain = chain_response['options']['option']
+            if not isinstance(chain, list):
+                chain = [chain]  # Handle single option case
+                
+            # Find the matching option
+            option_row = None
+            for option in chain:
+                if (option.get('option_type', '').lower()[0] == option_type.lower() and 
+                    abs(float(option.get('strike', 0)) - strike) < 0.01):
+                    option_row = option
+                    break
             
-            # Format response to match expected structure
+            if not option_row:
+                logger.error(f"  ❌ Could not find matching option in chain")
+                return None
+            
+            # Transform into our format
             result = {
-                'expiration': expiration_date,
-                'calls': [
-                    {
-                        'strike': float(opt['strike']),
-                        'bid': float(opt['bid']),
-                        'ask': float(opt['ask']),
-                        'volume': int(opt.get('volume', 0)),
-                        'open_interest': int(opt.get('open_interest', 0))
-                    }
-                    for opt in chain_dict
-                    if opt.get('option_type') == 'call'
-                ],
-                'puts': [
-                    {
-                        'strike': float(opt['strike']),
-                        'bid': float(opt['bid']),
-                        'ask': float(opt['ask']),
-                        'volume': int(opt.get('volume', 0)),
-                        'open_interest': int(opt.get('open_interest', 0))
-                    }
-                    for opt in chain_dict
-                    if opt.get('option_type') == 'put'
-                ]
+                'bid': option_row.get('bid'),
+                'ask': option_row.get('ask'),
+                'last': option_row.get('last'),
+                'mark': (float(option_row.get('bid', 0)) + float(option_row.get('ask', 0))) / 2,
+                'bid_size': option_row.get('bid_size'),
+                'ask_size': option_row.get('ask_size'),
+                'volume': option_row.get('volume'),
+                'open_interest': option_row.get('open_interest'),
+                'exchange': option_row.get('exchange'),
+                
+                # Greeks data if available
+                'greeks_update_time': datetime.now().isoformat(),
+                'delta': option_row.get('delta'),
+                'gamma': option_row.get('gamma'),
+                'theta': option_row.get('theta'),
+                'vega': option_row.get('vega'),
+                'rho': option_row.get('rho'),
+                'phi': None,  # Not provided by Tradier
+                
+                # IV data from the chain if available
+                'bid_iv': option_row.get('bid_iv'),
+                'mid_iv': option_row.get('mid_iv'),
+                'ask_iv': option_row.get('ask_iv'),
+                'smv_vol': option_row.get('smv_vol'),
+                
+                # Contract details
+                'contract_size': option_row.get('contract_size', 100),
+                'expiration_type': option_row.get('expiration_type', 'regular'),
+                'is_closing_only': option_row.get('is_closing_only', False),
+                'is_tradeable': option_row.get('is_tradeable', True),
+                
+                # Market status from clock endpoint
+                'is_market_closed': market_status.get('clock', {}).get('state') not in ['open', 'premarket', 'postmarket']
             }
-            logger.debug(f"Formatted option chain: {result}")
+            
+            logger.info(f"  ✅ Successfully retrieved option data")
+            logger.info(f"    • Bid/Ask: ${result['bid']:.2f}/${result['ask']:.2f}")
+            logger.info(f"    • Volume: {result['volume']}")
+            logger.info(f"    • Open Interest: {result['open_interest']}")
+            
             return result
+            
         except Exception as e:
-            logger.error(f"Error fetching option chain for {symbol}: {e}", exc_info=True)
+            logger.error(f"❌ Error fetching option data for {option_symbol}: {str(e)}", exc_info=True)
             return None
     
-    def clear_cache(self):
-        """Clear the price cache."""
-        self.get_current_price.cache_clear()
+    def get_market_status(self) -> Dict[str, Any]:
+        """
+        Get the current market status from Tradier.
+        
+        Returns:
+            Dict containing market status information:
+            - state: 'open', 'closed', 'premarket', or 'postmarket'
+            - description: Human readable description
+            - next_state: Next market state
+            - next_change: Time of next state change
+        """
+        try:
+            return self.client.get_market_clock()
+        except Exception as e:
+            logger.error(f"Error getting market status: {str(e)}")
+            return {
+                'clock': {
+                    'state': 'unknown',
+                    'description': 'Error getting market status',
+                    'next_state': None,
+                    'next_change': None
+                }
+            }
 
 # Example usage:
 if __name__ == '__main__':
@@ -194,13 +239,10 @@ if __name__ == '__main__':
     
     # Get option chain
     print("\nFetching SPY options:")
-    spy_options = price_service.get_option_chain('SPY')
+    spy_options = price_service.get_option_data('SPY340')
     if spy_options:
-        print(f"Expiration date: {spy_options['expiration']}")
-        print(f"Number of calls: {len(spy_options['calls'])}")
-        print(f"Number of puts: {len(spy_options['puts'])}")
-        
-        # Show first few call options
-        print("\nSample call options (first 3):")
-        for call in spy_options['calls'][:3]:
-            print(f"Strike: ${call['strike']}, Bid: ${call['bid']}, Ask: ${call['ask']}") 
+        print(f"Expiration date: {spy_options['expiration_date']}")
+        print(f"Bid/Ask: ${spy_options['bid']:.2f}/${spy_options['ask']:.2f}")
+        print(f"Volume: {spy_options['volume']}")
+        print(f"Open Interest: {spy_options['open_interest']}")
+        print(f"Market status: {spy_options['market_status']}") 

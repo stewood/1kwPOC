@@ -9,6 +9,7 @@ from pathlib import Path
 import logging
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Union, Any, Tuple
+from threading import Lock
 
 # Configure logging
 logging.basicConfig(
@@ -33,6 +34,7 @@ class DatabaseManager:
         """
         # Keep track of open connections
         self._connections = []
+        self._connections_lock = Lock()
         
         # Ensure data directory exists
         self.data_dir = Path('data/db')
@@ -46,24 +48,27 @@ class DatabaseManager:
     
     def close(self):
         """Close all open database connections."""
-        for conn in self._connections:
-            try:
-                conn.close()
-            except Exception as e:
-                logger.error(f"Error closing connection: {e}")
-        self._connections.clear()
+        with self._connections_lock:
+            for conn in self._connections:
+                try:
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"Error closing connection: {e}")
+            self._connections.clear()
     
     @contextmanager
     def get_connection(self):
         """
         Context manager for database connections.
         Ensures connections are properly closed after use.
+        Thread-safe: each thread gets its own connection.
         """
         conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row  # Allows dictionary access to rows
-            self._connections.append(conn)  # Track this connection
+            with self._connections_lock:
+                self._connections.append(conn)  # Track this connection
             yield conn
         except sqlite3.Error as e:
             logger.error(f"Database connection error: {e}")
@@ -72,7 +77,9 @@ class DatabaseManager:
             if conn:
                 try:
                     conn.close()
-                    self._connections.remove(conn)  # Remove from tracked connections
+                    with self._connections_lock:
+                        if conn in self._connections:
+                            self._connections.remove(conn)  # Remove from tracked connections
                 except Exception as e:
                     logger.error(f"Error closing connection: {e}")
     
