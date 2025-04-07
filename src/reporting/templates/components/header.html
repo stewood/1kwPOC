@@ -1,0 +1,47 @@
+<!-- Header -->
+<header class="mb-5">
+    <h1 class="display-5 mb-4">Options Trading P&L Report</h1>
+    <div class="row g-4">
+        <!-- Summary Cards -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total P&L</h5>
+                    <p class="card-text h3 {% if data.total_pnl > 0 %}profit{% elif data.total_pnl < 0 %}loss{% else %}neutral{% endif %}">
+                        {{ data.total_pnl|format_money }}
+                    </p>
+                    <p class="card-text text-muted">{{ data.total_return|format_percent }} Return</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Active Trades</h5>
+                    <p class="card-text h3">{{ data.active_trades_count }}</p>
+                    <p class="card-text text-muted">Across {{ data.unique_underlyings }} Underlyings</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Win Rate</h5>
+                    <p class="card-text h3">{{ data.win_rate|format_percent }}</p>
+                    <p class="card-text text-muted">{{ (data.win_rate * data.active_trades_count / 100)|round|int }}/{{ data.active_trades_count }} Profitable</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Average P&L per Trade</h5>
+                    <p class="card-text h3 {% if data.avg_pnl_per_trade > 0 %}profit{% elif data.avg_pnl_per_trade < 0 %}loss{% else %}neutral{% endif %}">
+                        {{ data.avg_pnl_per_trade|format_money }}
+                    </p>
+                    <p class="card-text text-muted">{{ data.max_loss|format_money }} Max Loss</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</header> 

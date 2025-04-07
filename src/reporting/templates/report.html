@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% include "components/header.html" %}
+    {% include "components/charts.html" %}
+    
+    {% for strategy in data.strategies.values() %}
+        {% with %}
+            {% include "components/strategy.html" %}
+        {% endwith %}
+    {% endfor %}
+    
+    {% include "components/footer.html" %}
+{% endblock %} 

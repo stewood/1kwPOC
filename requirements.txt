@@ -7,16 +7,17 @@
 # sqlite3  # Standard library for SQLite database access
 
 # Required Dependencies
-requests>=2.31.0
+requests==2.31.0
 pyjwt>=2.8.0
 pydantic>=2.0.0
-python-dotenv>=1.0.0  # for .env file handling
-pytz>=2024.1  # for timezone handling
+python-dotenv==1.0.0  # for .env file handling
+pytz==2024.1  # for timezone handling
 
 # Local package in editable mode
 -e ./optionsamurai_api
 
 # Potential Future Dependencies:
 # DBUtils   # For connection pooling if needed
-# sqlalchemy # For ORM or advanced pooling/features
+sqlalchemy==2.0.23
 # pandas    # For data analysis 
+jinja2==3.1.2 

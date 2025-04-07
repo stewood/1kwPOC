@@ -1,0 +1,13 @@
+<!-- Footer -->
+<footer class="mt-5 pt-4 border-top">
+    <div class="row">
+        <div class="col-md-6">
+            <p class="text-muted">Report generated on {{ data.generated_at.strftime('%B %d, %Y %H:%M:%S %Z') }}</p>
+            <p class="text-muted">Market Status: {{ data.market_status }}</p>
+        </div>
+        <div class="col-md-6 text-end">
+            <p class="text-muted">VIX: {{ data.vix_price }} ({{ data.vix_change|format_percent }})</p>
+            <p class="text-muted">SPY: {{ data.spy_price|format_money }} ({{ data.spy_change|format_percent }})</p>
+        </div>
+    </div>
+</footer> 

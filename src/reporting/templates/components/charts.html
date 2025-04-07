@@ -1,0 +1,67 @@
+<!-- Charts Row -->
+<div class="row mb-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">P&L by Strategy</h5>
+                <canvas id="strategyChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">P&L Distribution</h5>
+                <canvas id="distributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Strategy P&L Chart
+    new Chart(document.getElementById('strategyChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ strategy_chart_data.labels|tojson }},
+            datasets: [{
+                label: 'P&L ($)',
+                data: {{ strategy_chart_data.data|tojson }},
+                backgroundColor: {{ strategy_chart_data.colors|tojson }}
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // P&L Distribution Chart
+    new Chart(document.getElementById('distributionChart'), {
+        type: 'line',
+        data: {
+            labels: {{ distribution_chart_data.labels|tojson }},
+            datasets: [{
+                label: 'Number of Trades',
+                data: {{ distribution_chart_data.data|tojson }},
+                borderColor: 'rgba(0, 123, 255, 1)',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %} 

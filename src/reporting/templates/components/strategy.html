@@ -1,0 +1,72 @@
+<!-- Strategy Section -->
+<section class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{{ strategy.name }}</h2>
+        <div class="strategy-summary">
+            <span class="badge bg-{% if strategy.total_pnl > 0 %}success{% elif strategy.total_pnl < 0 %}danger{% else %}secondary{% endif %}">
+                {{ strategy.total_pnl|format_money }} Total P&L
+            </span>
+            <span class="badge bg-primary">{{ strategy.active_count }} Active Trades</span>
+            <span class="badge bg-info">{{ strategy.win_rate|format_percent }} Win Rate</span>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Expiration</th>
+                    <th>Days Left</th>
+                    {% if strategy.name == "Iron Condors" %}
+                        <th>Short Call</th>
+                        <th>Long Call</th>
+                        <th>Short Put</th>
+                        <th>Long Put</th>
+                    {% else %}
+                        <th>Short Strike</th>
+                        <th>Long Strike</th>
+                    {% endif %}
+                    <th>Entry Credit</th>
+                    <th>Current Value</th>
+                    <th>P&L</th>
+                    <th>P&L %</th>
+                    {% if strategy.name != "Iron Condors" %}
+                        <th>Delta</th>
+                        <th>Theta</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in strategy.trades %}
+                    <tr class="{% if trade.days_left <= warning_thresholds.days_left %}expiring-soon{% elif trade.pnl_percent >= warning_thresholds.high_profit_pct %}high-profit{% elif trade.pnl_percent <= warning_thresholds.high_loss_pct %}high-loss{% endif %}">
+                        <td>{{ trade.symbol }}</td>
+                        <td>{{ trade.expiration|format_date }}</td>
+                        <td>{{ trade.days_left }}</td>
+                        {% if strategy.name == "Iron Condors" %}
+                            {% for leg in trade.legs %}
+                                <td>{{ leg.strike }}{{ leg.type|upper }} @ {{ leg.entry_price }}</td>
+                            {% endfor %}
+                        {% else %}
+                            {% set short_leg = trade.legs|selectattr('is_short', 'eq', true)|first %}
+                            {% set long_leg = trade.legs|selectattr('is_short', 'eq', false)|first %}
+                            <td>{{ short_leg.strike }}{{ short_leg.type|upper }} @ {{ short_leg.entry_price }}</td>
+                            <td>{{ long_leg.strike }}{{ long_leg.type|upper }} @ {{ long_leg.entry_price }}</td>
+                        {% endif %}
+                        <td>{{ trade.entry_credit|format_money }}</td>
+                        <td>{{ trade.current_value|format_money }}</td>
+                        <td class="{% if trade.pnl > 0 %}profit{% elif trade.pnl < 0 %}loss{% else %}neutral{% endif %}">
+                            {{ trade.pnl|format_money }}
+                        </td>
+                        <td class="{% if trade.pnl_percent > 0 %}profit{% elif trade.pnl_percent < 0 %}loss{% else %}neutral{% endif %}">
+                            {{ trade.pnl_percent|format_percent }}
+                        </td>
+                        {% if strategy.name != "Iron Condors" %}
+                            <td>{{ trade.delta }}</td>
+                            <td>{{ trade.theta }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section> 

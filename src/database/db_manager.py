@@ -800,4 +800,50 @@ class DatabaseManager:
                 
         except sqlite3.Error as e:
             logger.error(f"Error retrieving active price tracking: {e}")
-            raise 
+            raise
+
+    def get_latest_option_price_data(self, option_symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch the most recent price tracking record for a specific option symbol."""
+        sql = """
+            SELECT * 
+            FROM option_price_tracking 
+            WHERE option_symbol = ? 
+            ORDER BY tracking_id DESC -- Assuming higher ID means later record
+            LIMIT 1
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute(sql, (option_symbol,))
+                row = cursor.fetchone()
+                if row:
+                    logger.debug(f"Found latest price data for {option_symbol}")
+                    return dict(row) # Convert sqlite3.Row to dict
+                else:
+                    logger.warning(f"No price data found in DB for {option_symbol}")
+                    return None
+        except sqlite3.Error as e:
+            logger.error(f"Error fetching latest price for {option_symbol}: {e}")
+            return None
+            
+    def get_price_tracking_history(self, trade_id: int, option_symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch price tracking history for a trade, optionally filtering by option symbol."""
+        try:
+            with self.get_connection() as conn:
+                query = '''
+                SELECT * FROM option_price_tracking
+                WHERE trade_id = ?
+                '''
+                params = [trade_id]
+                
+                if option_symbol:
+                    query += ' AND option_symbol = ?'
+                    params.append(option_symbol)
+                    
+                query += ' ORDER BY tracking_date ASC, last_update_time ASC'
+                
+                cursor = conn.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error fetching active trades: {e}")
+            return [] 

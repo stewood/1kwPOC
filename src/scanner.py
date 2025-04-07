@@ -19,6 +19,7 @@ from .config import Config
 from .services.optionsamurai_service import OptionSamuraiService
 from .services.price_service import PriceService
 from .pipeline import DataPipeline
+from .database.db_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,37 +30,32 @@ class ScanManager:
     handles caching, and implements retry logic for failures.
     """
     
-    def __init__(self, config: Config):
-        """Initialize the scan manager.
-        
+    def __init__(self, config: Config, db_manager: Optional[DatabaseManager] = None):
+        """Initialize the Scanner with configuration.
+
         Args:
-            config (Config): Application configuration instance
+            config (Config): Application configuration
+            db_manager (Optional[DatabaseManager]): Database manager instance
         """
         self.config = config
-        self.optionsamurai = OptionSamuraiService()
+        self.db_manager = db_manager
+        self.optionsamurai = OptionSamuraiService(self.config)
         self.pipeline = DataPipeline()
         self.stop_event = Event()
         self._cache: Dict[int, Dict[str, Any]] = {}
         self._last_scan_times: Dict[int, datetime] = {}
         
-        # Initialize Option Samurai service
-        logger.info("🔄 Initializing Option Samurai service...")
+        # Initialize Price service if Tradier token is available
+        self.price_service = None
+        if self.config.tradier_token:
+            self.price_service = PriceService(self.config)
+        else:
+            logger.info("ℹ️  Price service disabled (TRADIER_TOKEN not set)")
+        
         if not self.optionsamurai._client:
             logger.error("❌ Failed to initialize Option Samurai service. Check your API token.")
             raise RuntimeError("Option Samurai service initialization failed")
         logger.info("✅ Option Samurai service initialized successfully")
-        
-        # Initialize Price service if Tradier token is available
-        self.price_service = None
-        if self.config.tradier_token:
-            logger.info("🔄 Initializing Price service...")
-            try:
-                self.price_service = PriceService()
-                logger.info("✅ Price service initialized successfully")
-            except ValueError as e:
-                logger.warning(f"⚠️  Price service not initialized: {e}")
-        else:
-            logger.info("ℹ️  Price service disabled (TRADIER_TOKEN not set)")
     
     def start(self):
         """Start the main scanning loop.

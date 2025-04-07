@@ -20,6 +20,7 @@ from .services.optionsamurai_service import OptionSamuraiService
 from .services.price_service import PriceService
 from .services.price_tracking import PriceTrackingService
 from .pipeline.data_pipeline import DataPipeline
+from .reporting import ReportingService
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +45,7 @@ class Application:
         self.pipeline: Optional[DataPipeline] = None
         self.price_service: Optional[PriceService] = None
         self.price_tracking: Optional[PriceTrackingService] = None
+        self.reporting_service: Optional[ReportingService] = None
         self._setup_signal_handlers()
     
     def _setup_signal_handlers(self):
@@ -51,11 +53,25 @@ class Application:
         signal.signal(signal.SIGINT, self._handle_shutdown)
         signal.signal(signal.SIGTERM, self._handle_shutdown)
     
-    def _handle_shutdown(self, signum, frame):
-        """Handle shutdown signals gracefully."""
-        logger.info("Received shutdown signal")
-        self.shutdown()
-        sys.exit(0)
+    def _handle_shutdown(self, *args):
+        """Handle graceful shutdown."""
+        logger.info("🛑 Shutting down...")
+        try:
+            if self.price_tracking:
+                self.price_tracking.stop()
+            
+            # Generate final report
+            if self.reporting_service:
+                try:
+                    report_path = self.reporting_service.generate_end_of_run_report()
+                    logger.info(f"📊 Generated final P&L report: {report_path}")
+                except Exception as e:
+                    logger.error(f"Failed to generate report: {e}")
+            
+            sys.exit(0)
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+            sys.exit(1)
     
     def start(self):
         """Start the application.
@@ -87,41 +103,27 @@ class Application:
             )
             
             # Test Option Samurai connection
-            logger.info("🔌 Testing Option Samurai connection...")
-            try:
-                optionsamurai = OptionSamuraiService()
-                scans = optionsamurai.list_scans()
-                if scans:
-                    logger.info(f"✅ Successfully connected to Option Samurai. Found {len(scans)} available scans:")
-                    for scan in scans:
-                        logger.info(f"  • {scan.label} (ID: {scan.id})")
-                else:
-                    logger.warning("⚠️ Connected to Option Samurai but no scans found. Please create some scans first.")
-                
-                # Initialize scanner and pipeline
-                logger.info("🚀 Initializing scanner and pipeline...")
-                self.scanner = ScanManager(self.config)
-                self.pipeline = DataPipeline(db_manager=self.db_manager)
-                logger.info("✅ Components initialized successfully")
-                
-                # Run a single scan cycle
-                logger.info("🔍 Running scan cycle...")
-                self.scanner._run_scan_cycle()
-                logger.info("✅ Scan cycle completed")
-                
-                # Update prices for active trades
-                if self.price_tracking:
-                    logger.info("📈 Updating option prices for active trades...")
-                    self.price_tracking.update_prices()
-                    logger.info("✅ Price updates completed")
-                else:
-                    logger.info("⚠️ Price tracking skipped (service not available)")
-                
-            except Exception as e:
-                logger.error(f"❌ Error during scan execution: {e}", exc_info=True)
-            finally:
-                # Shutdown gracefully
-                self.shutdown()
+            self._test_optionsamurai_connection()
+            
+            # Initialize scanner and pipeline
+            logger.info("🚀 Initializing scanner and pipeline...")
+            self.scanner = ScanManager(self.config)
+            self.pipeline = DataPipeline(db_manager=self.db_manager)
+            self.reporting_service = ReportingService(self.db_manager, self.price_service, self.config)
+            logger.info("✅ Components initialized successfully")
+            
+            # Run a single scan cycle
+            logger.info("🔍 Running scan cycle...")
+            self.scanner._run_scan_cycle()
+            logger.info("✅ Scan cycle completed")
+            
+            # Update prices for active trades
+            if self.price_tracking:
+                logger.info("📈 Updating option prices for active trades...")
+                self.price_tracking.update_prices()
+                logger.info("✅ Price updates completed")
+            else:
+                logger.info("⚠️ Price tracking skipped (service not available)")
             
         except Exception as e:
             logger.error(f"❌ Error during startup: {e}", exc_info=True)
@@ -137,6 +139,18 @@ class Application:
             self.db_manager.close()
             
         logger.info("✅ Shutdown complete")
+
+    def _test_optionsamurai_connection(self):
+        """Test connection to Option Samurai API."""
+        logger.info("🔌 Testing Option Samurai connection...")
+        try:
+            optionsamurai = OptionSamuraiService(self.config)
+            scans = optionsamurai.list_scans()
+            logger.info(f"✅ Connected to Option Samurai. Found {len(scans)} available scans.")
+            if not scans:
+                logger.warning("⚠️ Connected to Option Samurai but no scans found. Please create some scans first.")
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to Option Samurai: {e}")
 
 def main():
     """Main entry point."""

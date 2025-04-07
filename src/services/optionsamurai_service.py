@@ -12,6 +12,7 @@ import os
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 from optionsamurai_api import APIClient
+from ..config import Config
 
 class OptionSamuraiService:
     """Service for interacting with Option Samurai API
@@ -23,19 +24,19 @@ class OptionSamuraiService:
         _client (Optional[APIClient]): The underlying API client instance
     """
     
-    def __init__(self):
-        """Initialize the service and load token from environment
+    def __init__(self, config: Optional[Config] = None):
+        """Initialize the service with optional configuration
         
-        Attempts to load the OPTIONSAMURAI_BEARER_TOKEN from environment
-        variables. If found, initializes the API client with this token.
+        Args:
+            config (Optional[Config]): Configuration object containing API token.
+                If not provided, service will initialize but remain inactive.
         """
-        load_dotenv()  # Load .env file if exists
         self._client: Optional[APIClient] = None
+        self._config = config
         
-        # Try to initialize with token from environment
-        token = os.getenv("OPTIONSAMURAI_BEARER_TOKEN")
-        if token:
-            self.set_token(token)
+        # Initialize with token from config if available
+        if self._config and self._config.optionsamurai_token:
+            self.set_token(self._config.optionsamurai_token)
     
     def set_token(self, token: str) -> bool:
         """Set API token without validation
