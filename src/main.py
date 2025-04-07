@@ -12,6 +12,7 @@ import logging
 import signal
 import sys
 from typing import Optional
+import argparse
 
 from .config import Config
 from .scanner import ScanManager
@@ -154,8 +155,82 @@ class Application:
 
 def main():
     """Main entry point."""
-    app = Application()
-    app.start()
+    
+    # --- Argument Parsing --- 
+    parser = argparse.ArgumentParser(description="Run the Option Samurai trading helper application.")
+    parser.add_argument(
+        '--init-db',
+        action='store_true',
+        help='Initialize the database schema (create tables/indexes if needed) and exit.'
+    )
+    parser.add_argument(
+        '--fetch-scans',
+        action='store_true',
+        help='Fetch latest results for configured scans from Option Samurai and store them in the database, then exit.'
+    )
+    args = parser.parse_args()
+    # --- End Argument Parsing --- 
+    
+    # --- Conditional Execution --- 
+    if args.init_db:
+        logger.info("--- Database Initialization Mode (--init-db) ---")
+        db_manager = None # Ensure db_manager is defined for finally block
+        try:
+            logger.info("Initializing Config to get DB path...")
+            config = Config()
+            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
+            db_manager = DatabaseManager(db_path=config.db_path)
+            # The initialize_database() call happens within DatabaseManager.__init__ now
+            logger.info("✅ Database initialized successfully (tables created/verified)." ) 
+        except Exception as e:
+             logger.error(f"❌ Error during database initialization: {e}", exc_info=True)
+             sys.exit(1)
+        finally:
+             if db_manager:
+                logger.info("Closing database manager...")
+                db_manager.close()
+        logger.info("--- Database Initialization Complete --- Exiting.")
+        sys.exit(0) # Exit after initializing DB
+
+    elif args.fetch_scans:
+        logger.info("--- Scan Fetch & Store Mode (--fetch-scans) ---")
+        db_manager = None # Ensure defined for finally
+        scanner = None # Ensure defined
+        try:
+            logger.info("Initializing Config...")
+            config = Config()
+            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
+            db_manager = DatabaseManager(db_path=config.db_path)
+            logger.info("Initializing ScanManager...")
+            # Pass config and db_manager to ScanManager constructor
+            scanner = ScanManager(config=config, db_manager=db_manager) 
+            logger.info("Running scan cycle to fetch and store...")
+            scanner._run_scan_cycle() # Call the method to fetch/store
+            logger.info("✅ Scan fetch and store process completed successfully.")
+        except Exception as e:
+            logger.error(f"❌ Error during scan fetch and store: {e}", exc_info=True)
+            sys.exit(1)
+        finally:
+            if db_manager:
+                logger.info("Closing database manager...")
+                db_manager.close()
+            # No specific shutdown needed for ScanManager itself in this context
+        logger.info("--- Scan Fetch & Store Complete --- Exiting.")
+        sys.exit(0) # Exit after fetching scans
+
+    else:
+        # --- Normal Application Flow --- 
+        logger.info("--- Starting Normal Application Run --- ")
+        app = Application()
+        app.start()
+        # The shutdown logic including report generation is now handled by signal handlers
+        # or when start() naturally finishes (though currently start() likely runs indefinitely or just one cycle)
+        # We might need a more explicit run loop or mechanism if start() is intended to be short-lived
+        logger.info("Application start() method finished. Waiting for shutdown signal (Ctrl+C)...")
+        # Keep the main thread alive if needed, e.g., if price tracking runs in background threads
+        # For now, assume start() runs its course or signal handlers manage exit.
+        # signal.pause() # Uncomment if background tasks need the main thread to wait indefinitely
+
 
 if __name__ == '__main__':
     main() 
