@@ -168,6 +168,11 @@ def main():
         action='store_true',
         help='Fetch latest results for configured scans from Option Samurai and store them in the database, then exit.'
     )
+    parser.add_argument(
+        '--update-prices',
+        action='store_true',
+        help='Update current market prices for options in active trades using Tradier and store them, then exit.'
+    )
     args = parser.parse_args()
     # --- End Argument Parsing --- 
     
@@ -217,6 +222,55 @@ def main():
             # No specific shutdown needed for ScanManager itself in this context
         logger.info("--- Scan Fetch & Store Complete --- Exiting.")
         sys.exit(0) # Exit after fetching scans
+
+    elif args.update_prices:
+        logger.info("--- Price Update Mode (--update-prices) ---")
+        db_manager = None
+        price_service = None
+        price_tracking_service = None
+        try:
+            logger.info("Initializing Config...")
+            config = Config()
+            
+            # Check for Tradier token
+            if not config.tradier_token:
+                logger.error("❌ TRADIER_TOKEN not found in environment variables. Price updates require this token.")
+                sys.exit(1)
+            logger.info("✅ Tradier token found.")
+
+            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
+            db_manager = DatabaseManager(db_path=config.db_path)
+            
+            logger.info("Initializing PriceService...")
+            try:
+                price_service = PriceService() # Assumes PriceService uses Config internally or needs it passed
+                # If PriceService needs config passed: price_service = PriceService(config=config)
+                logger.info("✅ PriceService initialized.")
+            except ValueError as e:
+                 logger.error(f"❌ Failed to initialize PriceService: {e}")
+                 sys.exit(1)
+
+            logger.info("Initializing PriceTrackingService...")
+            price_tracking_service = PriceTrackingService(
+                db_manager=db_manager, 
+                price_service=price_service
+            )
+            logger.info("✅ PriceTrackingService initialized.")
+
+            logger.info("📈 Updating option prices for active trades...")
+            price_tracking_service.update_prices() # Call the update method
+            logger.info("✅ Price updates completed successfully.")
+
+        except Exception as e:
+            logger.error(f"❌ Error during price update: {e}", exc_info=True)
+            sys.exit(1)
+        finally:
+            if db_manager:
+                logger.info("Closing database manager...")
+                db_manager.close()
+            # No specific shutdown needed for PriceService or PriceTrackingService
+        logger.info("--- Price Update Complete --- Exiting.")
+        sys.exit(0) # Exit after updating prices
 
     else:
         # --- Normal Application Flow --- 
