@@ -6,7 +6,10 @@ Test script to run only the reporting service generation.
 import os
 import sys
 import logging
+import logging.config
 from pathlib import Path
+from src.reporting import ReportingService
+from src.logging_config import setup_logging, get_logger
 
 # Add src directory to Python path for imports
 project_root = Path(__file__).parent
@@ -19,7 +22,6 @@ try:
     from src.config import Config
     from src.database.db_manager import DatabaseManager
     from src.services.price_service import PriceService
-    from src.reporting.service import ReportingService # Import the actual service
 except ImportError as e:
     print(f"❌ ERROR: Failed to import necessary project modules: {e}")
     print("Ensure the script is run from the project root and src is in the Python path.")
@@ -29,13 +31,10 @@ except ImportError as e:
     sys.exit(1)
 
 # --- Script Logic ---
-# Configure logging (basic setup)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()] # Log to console
-)
-logger = logging.getLogger("ReportingTest")
+# Configure test logging
+setup_logging('test') # Use centralized test config
+
+logger = get_logger("ReportingTest") # Use helper function, keeping specific name
 
 # Define variables to hold initialized components
 db_manager: DatabaseManager | None = None

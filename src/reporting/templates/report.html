@@ -4,11 +4,81 @@
     {% include "components/header.html" %}
     {% include "components/charts.html" %}
     
-    {% for strategy in data.strategies.values() %}
-        {% with %}
-            {% include "components/strategy.html" %}
-        {% endwith %}
-    {% endfor %}
+    <div class="strategy-section">
+        <h2>Strategy Performance</h2>
+        <div class="row">
+            <div class="col-md-8">
+                <table class="table table-striped table-hover table-sm small-text">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Active</th>
+                            <th>Total P&L</th>
+                            <th>Win Rate</th>
+                            <th>Avg P&L</th>
+                            <th>Max Loss</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for strategy_name, strategy_data in data.strategies.items() %}
+                        <tr>
+                            <td>{{ strategy_name }}</td>
+                            <td>{{ strategy_data.active_count }}</td>
+                            <td class="{% if strategy_data.total_pnl > 0 %}profit{% elif strategy_data.total_pnl < 0 %}loss{% endif %}">
+                                {{ strategy_data.total_pnl|format_money }}
+                            </td>
+                            <td>{{ strategy_data.win_rate|format_percent }}</td>
+                            <td class="{% if strategy_data.performance_metrics.avg_winner_size > 0 %}profit{% elif strategy_data.performance_metrics.avg_winner_size < 0 %}loss{% endif %}">
+                                {{ strategy_data.performance_metrics.avg_winner_size|format_money }} / {{ strategy_data.performance_metrics.avg_loser_size|format_money }}
+                            </td>
+                            <td class="loss">{{ strategy_data.risk_metrics.max_loss|format_money }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="strategy-section">
+        <div class="strategy-card">
+            <h3>Completed Trades</h3>
+            <div class="trades-table">
+                <table class="table table-striped table-hover table-sm small-text">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Entry Date</th>
+                            <th>Close Date</th>
+                            <th>Entry Credit</th>
+                            <th>Exit Debit</th>
+                            <th>P&L</th>
+                            <th>P&L %</th>
+                            <th>Exit Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trade in data.completed_trades_list %}
+                        <tr>
+                            <td>{{ trade.symbol }}</td>
+                            <td>{{ trade.entry_date | format_date }}</td>
+                            <td>{{ trade.close_date | format_date }}</td>
+                            <td>{{ trade.entry_credit | format_money }}</td>
+                            <td>{{ trade.exit_debit | format_money }}</td>
+                            <td class="{% if trade.pnl > 0 %}profit{% elif trade.pnl < 0 %}loss{% endif %}">
+                                {{ trade.pnl | format_money }}
+                            </td>
+                            <td class="{% if trade.pnl_pct > 0 %}profit{% elif trade.pnl_pct < 0 %}loss{% endif %}">
+                                {{ trade.pnl_pct | format_percent }}
+                            </td>
+                            <td>{{ trade.exit_type }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     
     {% include "components/footer.html" %}
 {% endblock %} 

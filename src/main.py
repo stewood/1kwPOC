@@ -8,11 +8,11 @@ This module initializes and runs the main application components:
 4. Data pipeline
 """
 
-import logging
 import signal
 import sys
 from typing import Optional
 import argparse
+import logging # Import logging module
 
 from .config import Config
 from .scanner import ScanManager
@@ -22,66 +22,34 @@ from .services.price_service import PriceService
 from .services.price_tracking import PriceTrackingService
 from .pipeline.data_pipeline import DataPipeline
 from .reporting import ReportingService
+from .logging_config import get_logger, setup_logging
 
-# Configure logging
-# Logging is configured in config.py
-# logging.basicConfig(
-#     level=logging.INFO,
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#     handlers=[
-#         logging.FileHandler('logs/app.log'),
-#         logging.StreamHandler()
-#     ]
-# )
-
-logger = logging.getLogger(__name__)
+# Initialize logging
+setup_logging()
+logger = get_logger(__name__)
 
 class Application:
-    """
-    Main application class.
-
-    This class is the entry point of the application and is responsible for:
-    - Initializing and configuring all application components (Config, DatabaseManager, Scanner, Pipeline, Services).
-    - Setting up signal handlers for graceful shutdown.
-    - Starting and stopping the main application loop.
-    - Generating end-of-run reports.
-    """
+    """Main application class that coordinates all components."""
     
     def __init__(self):
         """Initialize the application components."""
         self.config = Config()
-        self.db_manager: Optional[DatabaseManager] = None
-        self.scanner: Optional[ScanManager] = None
-        self.pipeline: Optional[DataPipeline] = None
-        self.price_service: Optional[PriceService] = None
-        self.price_tracking: Optional[PriceTrackingService] = None
-        self.reporting_service: Optional[ReportingService] = None
-        self._setup_signal_handlers()
-    
-    def _setup_signal_handlers(self):
-        """Set up signal handlers for graceful shutdown."""
+        self.db_manager = None
+        self.price_service = None
+        self.price_tracking = None
+        self.scanner = None
+        self.pipeline = None
+        self.reporting_service = None
+        
+        # Set up signal handlers
         signal.signal(signal.SIGINT, self._handle_shutdown)
         signal.signal(signal.SIGTERM, self._handle_shutdown)
     
-    def _handle_shutdown(self, *args):
-        """Handle graceful shutdown."""
-        logger.info("🛑 Shutting down...")
-        try:
-            if self.price_tracking:
-                self.price_tracking.stop()
-            
-            # Generate final report
-            if self.reporting_service:
-                try:
-                    report_path = self.reporting_service.generate_end_of_run_report()
-                    logger.info(f"📊 Generated final P&L report: {report_path}")
-                except Exception as e:
-                    logger.error(f"Failed to generate report: {e}")
-            
-            sys.exit(0)
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
-            sys.exit(1)
+    def _handle_shutdown(self, signum, frame):
+        """Handle shutdown signals."""
+        logger.info("Received shutdown signal %d", signum)
+        self.shutdown()
+        sys.exit(0)
     
     def start(self):
         """Start the application.
@@ -90,21 +58,21 @@ class Application:
         """
         try:
             # Initialize database
-            logger.info("🗄️ Initializing database...")
+            logger.info("Initializing database...")
             self.db_manager = DatabaseManager()
             self.db_manager.initialize_database()
-            logger.info("✅ Database initialized successfully")
+            logger.info("Database initialized successfully")
             
             # Initialize price service if Tradier token available
             if self.config.tradier_token:
-                logger.info("🔄 Initializing price service...")
+                logger.info("Initializing price service...")
                 try:
                     self.price_service = PriceService()
-                    logger.info("✅ Price service initialized successfully")
+                    logger.info("Price service initialized successfully")
                 except ValueError as e:
-                    logger.warning(f"⚠️ Price service not initialized: {e}")
+                    logger.warning("Price service not initialized: %s", e)
             else:
-                logger.info("📴 Price service disabled (TRADIER_TOKEN not set)")
+                logger.info("Price service disabled (TRADIER_TOKEN not set)")
             
             # Initialize price tracking
             self.price_tracking = PriceTrackingService(
@@ -112,58 +80,51 @@ class Application:
                 price_service=self.price_service
             )
             
-            # Test Option Samurai connection
-            self._test_optionsamurai_connection()
-            
             # Initialize scanner and pipeline
-            logger.info("🚀 Initializing scanner and pipeline...")
+            logger.info("Initializing scanner and pipeline...")
             self.scanner = ScanManager(self.config)
             self.pipeline = DataPipeline(db_manager=self.db_manager)
             self.reporting_service = ReportingService(self.db_manager, self.price_service, self.config)
-            logger.info("✅ Components initialized successfully")
+            logger.info("Components initialized successfully")
             
             # Run a single scan cycle
-            logger.info("🔍 Running scan cycle...")
+            logger.info("Running scan cycle...")
             self.scanner._run_scan_cycle()
-            logger.info("✅ Scan cycle completed")
-            
-            # Update prices for active trades
-            if self.price_tracking:
-                logger.info("📈 Updating option prices for active trades...")
-                self.price_tracking.update_prices()
-                logger.info("✅ Price updates completed")
-            else:
-                logger.info("⚠️ Price tracking skipped (service not available)")
+            logger.info("Scan cycle completed")
             
         except Exception as e:
-            logger.error(f"❌ Error during startup: {e}", exc_info=True)
+            logger.error("Error during application startup: %s", e, exc_info=True)
             self.shutdown()
-            sys.exit(1)
+            raise
     
     def shutdown(self):
         """Shutdown the application gracefully."""
-        logger.info("🛑 Shutting down application...")
-        
+        logger.info("Shutting down application...")
+        if self.scanner:
+            self.scanner.stop()
         if self.db_manager:
-            logger.info("🗄️ Closing database connections...")
             self.db_manager.close()
-            
-        logger.info("✅ Shutdown complete")
-
+        logger.info("Application shutdown complete")
+    
     def _test_optionsamurai_connection(self):
-        """Test connection to Option Samurai API."""
-        logger.info("🔌 Testing Option Samurai connection...")
-        try:
-            optionsamurai = OptionSamuraiService(self.config)
-            scans = optionsamurai.list_scans()
-            logger.info(f"✅ Connected to Option Samurai. Found {len(scans)} available scans.")
-            if not scans:
-                logger.warning("⚠️ Connected to Option Samurai but no scans found. Please create some scans first.")
-        except Exception as e:
-            logger.error(f"❌ Failed to connect to Option Samurai: {e}")
+        """Test the Option Samurai API connection."""
+        # This method is being removed as OptionSamuraiService has no test_connection
+        pass 
+        # try:
+        #     service = OptionSamuraiService(self.config)
+        #     service.test_connection()
+        #     logger.info("Option Samurai connection test successful")
+        # except Exception as e:
+        #     logger.error("Option Samurai connection test failed: %s", e)
+        #     raise
 
 def main():
     """Main entry point."""
+    
+    # Initialize Config first to set up logging
+    config = Config()
+    logger = get_logger(__name__)
+    logger.debug("Config initialized, setting up argument parser...")
     
     # --- Argument Parsing --- 
     parser = argparse.ArgumentParser(description="Run the Option Samurai trading helper application.")
@@ -187,55 +148,43 @@ def main():
         action='store_true',
         help='Generate the end-of-run P&L report based on database data and current prices, then exit.'
     )
+    parser.add_argument(
+        '--manage-trades',
+        action='store_true',
+        help='Run the trade management simulation to process active trades.'
+    )
     args = parser.parse_args()
-    # --- End Argument Parsing --- 
     
     # --- Conditional Execution --- 
     if args.init_db:
         logger.info("--- Database Initialization Mode (--init-db) ---")
-        db_manager = None # Ensure db_manager is defined for finally block
+        db_manager = None
         try:
             logger.info("Initializing Config to get DB path...")
             config = Config()
-            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
+            logger.info("Initializing DatabaseManager with path: %s", config.db_path)
             db_manager = DatabaseManager(db_path=config.db_path)
-            # The initialize_database() call happens within DatabaseManager.__init__ now
-            logger.info("✅ Database initialized successfully (tables created/verified)." ) 
+            logger.info("Database initialized successfully (tables created/verified)")
         except Exception as e:
-             logger.error(f"❌ Error during database initialization: {e}", exc_info=True)
-             sys.exit(1)
-        finally:
-             if db_manager:
-                logger.info("Closing database manager...")
-                db_manager.close()
-        logger.info("--- Database Initialization Complete --- Exiting.")
-        sys.exit(0) # Exit after initializing DB
-
-    elif args.fetch_scans:
-        logger.info("--- Scan Fetch & Store Mode (--fetch-scans) ---")
-        db_manager = None # Ensure defined for finally
-        scanner = None # Ensure defined
-        try:
-            logger.info("Initializing Config...")
-            config = Config()
-            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
-            db_manager = DatabaseManager(db_path=config.db_path)
-            logger.info("Initializing ScanManager...")
-            # Pass config and db_manager to ScanManager constructor
-            scanner = ScanManager(config=config, db_manager=db_manager) 
-            logger.info("Running scan cycle to fetch and store...")
-            scanner._run_scan_cycle() # Call the method to fetch/store
-            logger.info("✅ Scan fetch and store process completed successfully.")
-        except Exception as e:
-            logger.error(f"❌ Error during scan fetch and store: {e}", exc_info=True)
+            logger.error("Error during database initialization: %s", e, exc_info=True)
             sys.exit(1)
         finally:
             if db_manager:
                 logger.info("Closing database manager...")
                 db_manager.close()
-            # No specific shutdown needed for ScanManager itself in this context
-        logger.info("--- Scan Fetch & Store Complete --- Exiting.")
-        sys.exit(0) # Exit after fetching scans
+        logger.info("--- Database Initialization Complete --- Exiting.")
+        logging.shutdown() # Ensure logs are flushed before exiting
+        sys.exit(0)
+
+    elif args.fetch_scans:
+        logger.info("--- Scan Fetch & Store Mode (--fetch-scans) ---")
+        logger.debug("Creating application instance...")
+        app = Application()
+        logger.debug("Starting application...")
+        app.start()
+        logger.debug("Application completed, shutting down...")
+        app.shutdown()
+        logger.info("--- Scan Fetch & Store Mode Complete ---")
 
     elif args.update_prices:
         logger.info("--- Price Update Mode (--update-prices) ---")
@@ -336,6 +285,50 @@ def main():
         logger.info("--- Report Generation Complete --- Exiting.")
         sys.exit(0) # Exit after generating report
 
+    elif args.manage_trades:
+        logger.info("--- Trade Management Mode (--manage-trades) ---")
+        db_manager = None
+        price_service = None
+        trade_manager = None
+        try:
+            logger.info("Initializing Config...")
+            config = Config()
+            
+            logger.info(f"Initializing DatabaseManager with path: {config.db_path}")
+            db_manager = DatabaseManager(db_path=config.db_path)
+            
+            logger.info("Initializing PriceService...")
+            try:
+                price_service = PriceService() 
+                logger.info("✅ PriceService initialized.")
+            except ValueError as e:
+                logger.warning(f"⚠️ PriceService not initialized: {e}")
+                price_service = None
+
+            logger.info("Initializing TradeManager...")
+            from .services.trade_manager import TradeManager
+            trade_manager = TradeManager(
+                db_manager=db_manager,
+                price_service=price_service
+            )
+            logger.info("✅ TradeManager initialized.")
+
+            logger.info("Processing active trades...")
+            stats = trade_manager.process_active_trades()
+            logger.info("Trade processing statistics:")
+            for key, value in stats.items():
+                logger.info(f"  {key}: {value}")
+
+        except Exception as e:
+            logger.error(f"❌ Error during trade management: {e}", exc_info=True)
+            sys.exit(1)
+        finally:
+            if db_manager:
+                logger.info("Closing database manager...")
+                db_manager.close()
+        logger.info("--- Trade Management Complete --- Exiting.")
+        sys.exit(0)
+
     else:
         # --- Normal Application Flow --- 
         logger.info("--- Starting Normal Application Run --- ")
@@ -350,5 +343,5 @@ def main():
         # signal.pause() # Uncomment if background tasks need the main thread to wait indefinitely
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main() 

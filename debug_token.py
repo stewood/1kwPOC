@@ -1,8 +1,13 @@
 import logging
+import logging.config
+from pathlib import Path
 from src.database.db_manager import DatabaseManager
+from src.logging_config import setup_logging, get_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure test logging
+setup_logging('test') # Use centralized test config
+
+logger = get_logger(__name__) # Use helper function
 
 def debug_missing_price_data():
     db_manager = DatabaseManager()

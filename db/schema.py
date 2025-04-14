@@ -34,7 +34,10 @@ CREATE TABLE IF NOT EXISTS trades (
     call_long_strike DECIMAL(10,2) NOT NULL,
     put_short_strike DECIMAL(10,2),
     put_long_strike DECIMAL(10,2),
-    net_credit DECIMAL(10,2) NOT NULL,
+    theoretical_credit DECIMAL(10,2) NOT NULL,  -- Option Samurai's max_profit
+    actual_credit DECIMAL(10,2),                -- Based on Tradier bid/ask
+    net_credit DECIMAL(10,2) NOT NULL,          -- Credit used for P&L calculations
+    entry_price_source TEXT NOT NULL CHECK (entry_price_source IN ('optionsamurai', 'tradier')),
     status TEXT NOT NULL DEFAULT 'OPEN' 
         CHECK (status IN ('OPEN', 'CLOSED', 'EXPIRED')),
     close_date TIMESTAMP,

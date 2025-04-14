@@ -1,9 +1,11 @@
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import requests
 from datetime import datetime
+from ..logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+# Initialize logger using the helper function
+logger = get_logger(__name__)
 
 class TradierClient:
     """Client for interacting with Tradier's API directly."""
@@ -41,6 +43,7 @@ class TradierClient:
         """
         url = f"{self.base_url}{endpoint}"
         try:
+            logger.debug(f"Making {method} request to {url} with params: {params}")
             response = requests.request(
                 method=method,
                 url=url,
@@ -48,25 +51,32 @@ class TradierClient:
                 params=params
             )
             response.raise_for_status()
-            return response.json()
+            response_data = response.json()
+            logger.debug(f"Received response from Tradier API: {response_data}")
+            return response_data
         except requests.exceptions.RequestException as e:
             logger.error(f"Error making request to {url}: {str(e)}")
             raise
     
-    def get_quotes(self, symbols: List[str]) -> Dict:
+    def get_quotes(self, symbols: Union[str, List[str]]) -> Dict:
         """
         Get quotes for one or more symbols.
         
         Args:
-            symbols: List of symbols to get quotes for
+            symbols: A single symbol string or a list of symbol strings.
             
         Returns:
             Dictionary containing quote data
         """
+        if isinstance(symbols, list):
+            symbols_param = ','.join(symbols)
+        else:
+            symbols_param = symbols
+
         return self._make_request(
             'GET',
             '/markets/quotes',
-            params={'symbols': ','.join(symbols)}
+            params={'symbols': symbols_param}
         )
     
     def get_option_chains(self, symbol: str, expiration: str) -> Dict:
@@ -153,4 +163,26 @@ class TradierClient:
         Returns:
             Dictionary containing market status information
         """
-        return self._make_request('GET', '/markets/clock') 
+        return self._make_request('GET', '/markets/clock')
+
+    def get_history(self, symbol: str, date: str) -> Dict:
+        """
+        Get historical price data for a symbol on a specific date.
+        
+        Args:
+            symbol: The symbol to get history for
+            date: The date in YYYY-MM-DD format
+            
+        Returns:
+            Dictionary containing historical price data for the specified date
+        """
+        return self._make_request(
+            'GET',
+            '/markets/history',
+            params={
+                'symbol': symbol,
+                'start': date,
+                'end': date,
+                'interval': 'daily'
+            }
+        ) 

@@ -27,17 +27,12 @@ from services.optionsamurai_service import OptionSamuraiService
 from pipeline import DataPipeline
 from database.db_manager import DatabaseManager
 from config import Config
+from src.logging_config import setup_logging, get_logger
 
-# Configure logging with more detailed format
-logging.basicConfig(
-    level=logging.DEBUG,  # Set to DEBUG for maximum detail
-    format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/test_pipeline.log'),  # Log to file
-        logging.StreamHandler()  # Log to console
-    ]
-)
-logger = logging.getLogger(__name__)
+# Configure test logging
+setup_logging('test') # Use centralized test config
+
+logger = get_logger(__name__) # Use helper function
 
 def save_debug_data(data: Dict[str, Any], filename: str) -> None:
     """Save data to a debug file for analysis.

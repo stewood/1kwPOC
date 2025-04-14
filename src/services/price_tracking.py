@@ -18,8 +18,10 @@ import time
 from ..database.db_manager import DatabaseManager
 from ..services.price_service import PriceService
 from ..config import Config
+from ..logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+# Initialize logger using the helper function
+logger = get_logger(__name__)
 
 class PriceTrackingService:
     """Service for tracking option prices for active trades."""

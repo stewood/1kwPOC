@@ -47,6 +47,12 @@ logs/*
 
 # OS specific
 .DS_Store
-Thumbs.db venv/
+Thumbs.db
+
+# Generated Reports
+reports/
+
+# Existing cache/data folders
+venv/
 scan_results/
 optionsamurai_api/

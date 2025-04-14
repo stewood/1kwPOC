@@ -6,21 +6,13 @@ Handles all database operations for storing and retrieving trade information.
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-import logging
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Union, Any, Tuple
 from threading import Lock
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/database.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+from ..logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class DatabaseManager:
     """Manages all database operations for the trading system."""
@@ -42,6 +34,7 @@ class DatabaseManager:
         
         # Set database path
         self.db_path = Path(db_path) if db_path else self.data_dir / 'trades.db'
+        logger.debug("Database path set to: %s", self.db_path)
         
         # Initialize database
         self.initialize_database()
@@ -53,8 +46,9 @@ class DatabaseManager:
                 try:
                     conn.close()
                 except Exception as e:
-                    logger.error(f"Error closing connection: {e}")
+                    logger.error("Error closing connection: %s", e)
             self._connections.clear()
+            logger.debug("All database connections closed")
     
     @contextmanager
     def get_connection(self):
@@ -85,15 +79,17 @@ class DatabaseManager:
     
     def initialize_database(self):
         """Create database tables if they don't exist."""
+        logger.info("Initializing database tables...")
         try:
             with self.get_connection() as conn:
                 # Create active_trades table
+                logger.debug("Creating active_trades table...")
                 conn.execute('''
                 CREATE TABLE IF NOT EXISTS active_trades (
                     trade_id INTEGER PRIMARY KEY,
                     symbol TEXT NOT NULL,
                     underlying_price DECIMAL(10,2) NOT NULL,
-                    trade_type TEXT NOT NULL CHECK (trade_type IN ('BULL_PUT', 'BEAR_CALL', 'IRON_CONDOR')),
+                    trade_type TEXT NOT NULL CHECK (trade_type IN ('BULL_PUT', 'BEAR_CALL', 'IRON_CONDOR', 'BULL_CALL', 'BEAR_PUT')),
                     entry_date TIMESTAMP NOT NULL,
                     expiration_date DATE NOT NULL,
                     short_put DECIMAL(10,2),
@@ -104,22 +100,27 @@ class DatabaseManager:
                     long_call DECIMAL(10,2),
                     short_call_symbol TEXT,
                     long_call_symbol TEXT,
-                    net_credit DECIMAL(10,2) NOT NULL CHECK (net_credit > 0),
+                    theoretical_credit DECIMAL(10,2) NOT NULL,  -- Option Samurai's max_profit
+                    actual_credit DECIMAL(10,2),                -- Based on Tradier bid/ask
+                    net_credit DECIMAL(10,2) NOT NULL,          -- Credit used for P&L calculations
+                    entry_price_source TEXT NOT NULL CHECK (entry_price_source IN ('optionsamurai', 'tradier')),
                     num_contracts INTEGER NOT NULL DEFAULT 1 CHECK (num_contracts > 0),
                     status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSING', 'EXPIRED')),
+                    spread_type TEXT NOT NULL DEFAULT 'CREDIT' CHECK (spread_type IN ('CREDIT', 'DEBIT')),
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 ''')
                 
                 # Create completed_trades table
+                logger.debug("Creating completed_trades table...")
                 conn.execute('''
                 CREATE TABLE IF NOT EXISTS completed_trades (
                     trade_id INTEGER PRIMARY KEY,
                     symbol TEXT NOT NULL,
                     underlying_entry_price DECIMAL(10,2) NOT NULL,
                     underlying_exit_price DECIMAL(10,2) NOT NULL,
-                    trade_type TEXT NOT NULL,
+                    trade_type TEXT NOT NULL CHECK (trade_type IN ('BULL_PUT', 'BEAR_CALL', 'IRON_CONDOR', 'BULL_CALL', 'BEAR_PUT')),
                     entry_date TIMESTAMP NOT NULL,
                     expiration_date DATE NOT NULL,
                     close_date TIMESTAMP NOT NULL,
@@ -131,17 +132,19 @@ class DatabaseManager:
                     long_call DECIMAL(10,2),
                     short_call_symbol TEXT,
                     long_call_symbol TEXT,
-                    entry_credit DECIMAL(10,2) NOT NULL CHECK (entry_credit > 0),
+                    entry_credit DECIMAL(10,2) NOT NULL,  -- Can be negative for debit spreads
                     exit_debit DECIMAL(10,2) CHECK (exit_debit >= 0),
                     num_contracts INTEGER NOT NULL CHECK (num_contracts > 0),
                     actual_profit_loss DECIMAL(10,2) NOT NULL,
                     exit_type TEXT NOT NULL CHECK (exit_type IN ('EXPIRED', 'CLOSED_EARLY', 'STOPPED_OUT', 'ROLLED')),
+                    spread_type TEXT NOT NULL DEFAULT 'CREDIT' CHECK (spread_type IN ('CREDIT', 'DEBIT')),
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 ''')
                 
                 # Create trade_status_history table
+                logger.debug("Creating trade_status_history table...")
                 conn.execute('''
                 CREATE TABLE IF NOT EXISTS trade_status_history (
                     history_id INTEGER PRIMARY KEY,
@@ -154,6 +157,7 @@ class DatabaseManager:
                 ''')
                 
                 # Create option_price_tracking table
+                logger.debug("Creating option_price_tracking table...")
                 conn.execute('''
                 CREATE TABLE IF NOT EXISTS option_price_tracking (
                     tracking_id INTEGER PRIMARY KEY,
@@ -191,6 +195,7 @@ class DatabaseManager:
                 ''')
                 
                 # Create indexes
+                logger.debug("Creating indexes...")
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_active_trades_symbol ON active_trades(symbol)')
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_active_trades_status ON active_trades(status)')
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_active_trades_expiration ON active_trades(expiration_date)')
@@ -198,6 +203,7 @@ class DatabaseManager:
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_completed_trades_dates ON completed_trades(entry_date, close_date)')
                 
                 # Create trigger for updated_at
+                logger.debug("Creating triggers...")
                 conn.execute('''
                 CREATE TRIGGER IF NOT EXISTS update_active_trades_timestamp 
                     AFTER UPDATE ON active_trades
@@ -219,40 +225,24 @@ class DatabaseManager:
                 ''')
                 
                 conn.commit()
-                logger.info("Database initialized successfully")
+                logger.info("Database initialization completed successfully")
                 
         except sqlite3.Error as e:
-            logger.error(f"Error initializing database: {e}")
-            raise 
-
+            logger.error("Error initializing database: %s", e, exc_info=True)
+            raise
+    
     def save_new_trade(self, trade_data: Dict[str, Any]) -> int:
-        """
-        Save a new trade from Option Samurai scan results.
+        """Save a new trade to the active_trades table.
         
         Args:
-            trade_data: Dictionary containing trade information
-                Required keys:
-                - symbol: Stock symbol
-                - underlying_price: Current stock price
-                - trade_type: BULL_PUT, BEAR_CALL, or IRON_CONDOR
-                - expiration_date: Option expiration date
-                - net_credit: Credit received for the trade
-                - num_contracts: Number of contracts
-                Optional keys (depending on trade_type):
-                - short_put, long_put: Strike prices for put options
-                - short_call, long_call: Strike prices for call options
-                - short_put_symbol, long_put_symbol: OCC option symbols
-                - short_call_symbol, long_call_symbol: OCC option symbols
-        
-        Returns:
-            trade_id: ID of the newly created trade
-        """
-        required_fields = {'symbol', 'underlying_price', 'trade_type', 
-                         'expiration_date', 'net_credit', 'num_contracts'}
-        
-        if missing := required_fields - set(trade_data.keys()):
-            raise ValueError(f"Missing required fields: {missing}")
+            trade_data: Dictionary with trade data matching database schema
             
+        Returns:
+            ID of the newly created trade
+            
+        Raises:
+            sqlite3.Error: If there is a database error
+        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.execute('''
@@ -260,12 +250,14 @@ class DatabaseManager:
                     symbol, underlying_price, trade_type, entry_date,
                     expiration_date, short_put, long_put, short_put_symbol,
                     long_put_symbol, short_call, long_call, short_call_symbol,
-                    long_call_symbol, net_credit, num_contracts
+                    long_call_symbol, theoretical_credit, actual_credit, net_credit,
+                    entry_price_source, num_contracts
                 ) VALUES (
                     :symbol, :underlying_price, :trade_type, CURRENT_TIMESTAMP,
                     :expiration_date, :short_put, :long_put, :short_put_symbol,
                     :long_put_symbol, :short_call, :long_call, :short_call_symbol,
-                    :long_call_symbol, :net_credit, :num_contracts
+                    :long_call_symbol, :theoretical_credit, :actual_credit, :net_credit,
+                    :entry_price_source, :num_contracts
                 )
                 ''', trade_data)
                 
@@ -356,7 +348,8 @@ class DatabaseManager:
                     trade['short_put_symbol'], trade['long_put_symbol'],
                     trade['short_call'], trade['long_call'],
                     trade['short_call_symbol'], trade['long_call_symbol'],
-                    trade['net_credit'], exit_data['exit_debit'],
+                    trade['net_credit'],  # No longer using abs() to allow negative values
+                    exit_data['exit_debit'],
                     trade['num_contracts'], exit_data['actual_profit_loss'],
                     exit_data['exit_type']
                 ))
@@ -392,7 +385,8 @@ class DatabaseManager:
                     ''', (status,))
                 else:
                     cursor = conn.execute('''
-                    SELECT * FROM active_trades
+                    SELECT * FROM active_trades 
+                    WHERE status != 'EXPIRED'
                     ORDER BY expiration_date ASC
                     ''')
                 
@@ -846,4 +840,38 @@ class DatabaseManager:
                 
         except sqlite3.Error as e:
             logger.error(f"Error fetching active trades: {e}")
-            return [] 
+            return []
+
+    def apply_migration(self, migration_file: str) -> None:
+        """
+        Apply a migration script to the database.
+        
+        Args:
+            migration_file: Path to the SQL migration file
+            
+        Raises:
+            sqlite3.Error: If there's an error during migration
+            FileNotFoundError: If the migration file doesn't exist
+        """
+        migration_path = Path(migration_file)
+        if not migration_path.exists():
+            raise FileNotFoundError(f"Migration file not found: {migration_file}")
+            
+        try:
+            with self.get_connection() as conn:
+                # Read and execute the migration script
+                with open(migration_path, 'r') as f:
+                    migration_sql = f.read()
+                    
+                # Split into individual statements and execute each one
+                statements = migration_sql.split(';')
+                for statement in statements:
+                    if statement.strip():  # Skip empty statements
+                        conn.execute(statement)
+                        
+                conn.commit()
+                logger.info(f"Successfully applied migration: {migration_file}")
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error applying migration {migration_file}: {e}")
+            raise 

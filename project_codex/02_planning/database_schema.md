@@ -13,7 +13,7 @@ CREATE TABLE active_trades (
     trade_id INTEGER PRIMARY KEY,
     symbol TEXT NOT NULL,                    -- Underlying symbol (e.g., 'SPY')
     underlying_price DECIMAL(10,2) NOT NULL, -- Price of underlying at entry
-    trade_type TEXT NOT NULL CHECK (trade_type IN ('BULL_PUT', 'BEAR_CALL', 'IRON_CONDOR')),
+    trade_type TEXT NOT NULL CHECK (trade_type IN ('BULL_PUT', 'BEAR_CALL', 'IRON_CONDOR', 'BULL_CALL', 'BEAR_PUT')),
     entry_date TIMESTAMP NOT NULL,
     expiration_date DATE NOT NULL,
     
@@ -29,9 +29,10 @@ CREATE TABLE active_trades (
     short_call_symbol TEXT,   -- OCC Option Symbol
     long_call_symbol TEXT,    -- OCC Option Symbol
     
-    net_credit DECIMAL(10,2) NOT NULL CHECK (net_credit > 0),
+    net_credit DECIMAL(10,2) NOT NULL,  -- Can be negative for debit spreads
     num_contracts INTEGER NOT NULL DEFAULT 1 CHECK (num_contracts > 0),
     status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSING', 'EXPIRED')),
+    spread_type TEXT NOT NULL DEFAULT 'CREDIT' CHECK (spread_type IN ('CREDIT', 'DEBIT')),
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -47,7 +48,7 @@ CREATE TABLE completed_trades (
     symbol TEXT NOT NULL,
     underlying_entry_price DECIMAL(10,2) NOT NULL,
     underlying_exit_price DECIMAL(10,2) NOT NULL,
-    trade_type TEXT NOT NULL,
+    trade_type TEXT NOT NULL CHECK (trade_type IN ('BULL_PUT', 'BEAR_CALL', 'IRON_CONDOR', 'BULL_CALL', 'BEAR_PUT')),
     entry_date TIMESTAMP NOT NULL,
     expiration_date DATE NOT NULL,
     close_date TIMESTAMP NOT NULL,
@@ -64,11 +65,12 @@ CREATE TABLE completed_trades (
     short_call_symbol TEXT,
     long_call_symbol TEXT,
     
-    entry_credit DECIMAL(10,2) NOT NULL CHECK (entry_credit > 0),
+    entry_credit DECIMAL(10,2) NOT NULL,  -- Can be negative for debit spreads
     exit_debit DECIMAL(10,2) CHECK (exit_debit >= 0),
     num_contracts INTEGER NOT NULL CHECK (num_contracts > 0),
     actual_profit_loss DECIMAL(10,2) NOT NULL,
     exit_type TEXT NOT NULL CHECK (exit_type IN ('EXPIRED', 'CLOSED_EARLY', 'STOPPED_OUT', 'ROLLED')),
+    spread_type TEXT NOT NULL DEFAULT 'CREDIT' CHECK (spread_type IN ('CREDIT', 'DEBIT')),
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -92,17 +94,20 @@ CREATE TABLE trade_status_history (
 ## Constraints
 
 ### active_trades Constraints
-1. Valid trade type checking
+1. Valid trade type checking (now includes BULL_CALL and BEAR_PUT)
 2. Date validation (expiration > entry)
 3. Trade structure validation:
    - Bull Put: requires put strikes only
    - Bear Call: requires call strikes only
    - Iron Condor: requires all strikes with proper relationships
+   - Bull Call: requires call strikes only
+   - Bear Put: requires put strikes only
+4. Spread type validation (CREDIT or DEBIT)
 
 ### completed_trades Constraints
 1. Date validations (close <= expiration, close >= entry)
-2. Positive credit/debit values
-3. Valid exit types
+2. Valid exit types
+3. Spread type validation (CREDIT or DEBIT)
 
 ## Indexes
 ```sql
@@ -150,4 +155,21 @@ Option symbols follow the OCC format:
   * SPY: Underlying symbol
   * 240419: Expiration (YYMMDD)
   * P/C: Put/Call
-  * 410000: Strike price ($410.00) 
+  * 410000: Strike price ($410.00)
+
+## Trade Types
+The system now supports both credit and debit spreads:
+
+### Credit Spreads
+- BULL_PUT: Bullish put credit spread
+- BEAR_CALL: Bearish call credit spread
+- IRON_CONDOR: Iron condor (combination of put and call credit spreads)
+
+### Debit Spreads
+- BULL_CALL: Bullish call debit spread
+- BEAR_PUT: Bearish put debit spread
+
+## Spread Types
+Each trade is marked with a spread_type:
+- CREDIT: Trade that receives a credit at entry
+- DEBIT: Trade that requires a debit at entry 

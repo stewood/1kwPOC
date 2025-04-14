@@ -12,10 +12,10 @@ from functools import lru_cache
 import re
 from .tradier_client import TradierClient
 from ..config import Config
+from ..logging_config import get_logger
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for more detailed logs
-logger = logging.getLogger(__name__)
+# Initialize logger using the helper function
+logger = get_logger(__name__)
 
 class PriceService:
     """Service for fetching real-time market data using Tradier."""
@@ -41,24 +41,95 @@ class PriceService:
         logger.debug("Tradier client initialized successfully")
     
     def get_current_price(self, symbol: str) -> Optional[float]:
-        """Get current price for a symbol.
+        """
+        Get the current price for a symbol.
+        Handles potential errors in the response structure.
         
         Args:
-            symbol: Stock symbol to get price for
+            symbol: The symbol to get the price for
             
         Returns:
-            Current price or None if not available
+            Current price as a float, or None if unavailable/error.
         """
         try:
-            response = self.client.get_quotes([symbol])
-            if 'quotes' in response and 'quote' in response['quotes']:
-                quote = response['quotes']['quote']
-                if isinstance(quote, list):
-                    quote = quote[0]  # Take first quote if multiple returned
-                return float(quote.get('last', 0))
-            return None
+            logger.info(f"Getting current quote for {symbol}...")
+            response = self.client.get_quotes(symbol)
+            logger.debug(f"Raw Tradier quote response for {symbol}: {response}")
+            
+            # Check response structure carefully
+            if response and isinstance(response, dict) and 'quotes' in response:
+                quotes_data = response['quotes']
+                if quotes_data and isinstance(quotes_data, dict) and 'quote' in quotes_data:
+                    quote = quotes_data['quote']
+                    # Handle case where single quote is not a list
+                    if isinstance(quote, list):
+                        # If multiple symbols were somehow requested/returned, find the right one
+                        target_quote = next((q for q in quote if q.get('symbol') == symbol), None)
+                    elif isinstance(quote, dict) and quote.get('symbol') == symbol:
+                        target_quote = quote
+                    else:
+                        target_quote = None
+                        
+                    if target_quote and 'last' in target_quote and target_quote['last'] is not None:
+                        price = float(target_quote['last'])
+                        logger.info(f"Successfully retrieved current price for {symbol}: {price}")
+                        return price
+                    else:
+                        logger.warning(f"Could not extract 'last' price from quote for {symbol}. Quote data: {target_quote}")
+                        return None
+                else:
+                     logger.warning(f"'quote' key missing or invalid in quotes data for {symbol}. Quotes data: {quotes_data}")
+                     return None
+            else:
+                logger.warning(f"Unexpected response structure or missing 'quotes' key for {symbol}. Full response: {response}")
+                return None
+                
         except Exception as e:
-            logger.error(f"Error getting price for {symbol}: {str(e)}")
+            logger.error(f"Error getting current price for {symbol}: {str(e)}", exc_info=True)
+            return None
+    
+    def get_historical_price(self, symbol: str, date: str) -> Optional[float]:
+        """
+        Get the historical price for a symbol on a specific date.
+        
+        Args:
+            symbol: The symbol to get the price for
+            date: The date in YYYY-MM-DD format
+            
+        Returns:
+            Historical price as a float, or None if no data available
+        """
+        try:
+            logger.info(f"Getting historical price for {symbol} on {date}")
+            history = self.client.get_history(symbol, date)
+            
+            # Log the complete response structure
+            logger.debug(f"Raw history response structure: {history}")
+            
+            if not history:
+                logger.warning(f"No history response for {symbol} on {date}")
+                return None
+                
+            if not history.get('history'):
+                logger.warning(f"Response missing 'history' key. Full response: {history}")
+                return None
+                
+            day_data = history['history'].get('day')
+            if not day_data:
+                logger.warning(f"No daily data found in history['history']['day']. History structure: {history['history']}")
+                return None
+                
+            # Log what we found in a structured way
+            logger.info(f"Found historical data for {symbol}:")
+            logger.info("Daily data:")
+            for key, value in day_data.items():
+                logger.info(f"  {key}: {value}")
+                
+            return float(day_data['close'])
+            
+        except Exception as e:
+            logger.error(f"Error getting historical price for {symbol} on {date}: {str(e)}")
+            logger.exception("Full traceback:")
             return None
     
     def get_current_prices(self, symbols: List[str]) -> Dict[str, Optional[float]]:

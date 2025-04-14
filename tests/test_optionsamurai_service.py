@@ -12,6 +12,7 @@ import os
 import sys
 from pathlib import Path
 import logging
+import logging.config
 from typing import Dict, Any
 import json
 from datetime import datetime
@@ -22,13 +23,12 @@ src_path = Path(__file__).parent.parent / 'src'
 sys.path.insert(0, str(src_path))
 
 from services.optionsamurai_service import OptionSamuraiService
+from src.logging_config import setup_logging, get_logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Configure test logging
+setup_logging('test') # Use centralized test config
+
+logger = get_logger(__name__) # Use helper function
 
 def safe_filename(name: str) -> str:
     """Convert a string to a safe filename by removing invalid characters.

@@ -11,6 +11,7 @@ Handles:
 
 import time
 import logging
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from threading import Event
@@ -20,8 +21,10 @@ from .services.optionsamurai_service import OptionSamuraiService
 from .services.price_service import PriceService
 from .pipeline import DataPipeline
 from .database.db_manager import DatabaseManager
+from .logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+# Initialize logger using the helper function
+logger = get_logger(__name__)
 
 class ScanManager:
     """Manages the scanning process for option trade opportunities.
@@ -40,7 +43,6 @@ class ScanManager:
         self.config = config
         self.db_manager = db_manager
         self.optionsamurai = OptionSamuraiService(self.config)
-        self.pipeline = DataPipeline()
         self.stop_event = Event()
         self._cache: Dict[int, Dict[str, Any]] = {}
         self._last_scan_times: Dict[int, datetime] = {}
@@ -49,8 +51,12 @@ class ScanManager:
         self.price_service = None
         if self.config.tradier_token:
             self.price_service = PriceService(self.config)
+            logger.info("✅ Price service initialized successfully")
         else:
             logger.info("ℹ️  Price service disabled (TRADIER_TOKEN not set)")
+        
+        # Initialize pipeline with price service
+        self.pipeline = DataPipeline(db_manager=self.db_manager, price_service=self.price_service)
         
         if not self.optionsamurai._client:
             logger.error("❌ Failed to initialize Option Samurai service. Check your API token.")
@@ -127,6 +133,10 @@ class ScanManager:
                 if not results:
                     logger.warning(f"⚠️  No results from scan '{scan_label}'")
                     continue
+                
+                # Log raw results for debugging
+                logger.info(f"Raw scan results for {scan_label}:")
+                logger.info(json.dumps(results, indent=2))
                 
                 # Process results through pipeline
                 trade_ids = self.pipeline.process_scan_results(results, scan_label)

@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from .models import ReportData
+from .models import ReportData, CompletedTrade
 
 class HTMLReportGenerator:
     def __init__(self, template_dir: str = None):
@@ -36,7 +36,8 @@ class HTMLReportGenerator:
                 'days_left': 21,
                 'high_profit_pct': 50,
                 'high_loss_pct': -50
-            }
+            },
+            'completed_trades_table': self._generate_completed_trades_table(data.completed_trades_list)
         }
         
         # Render and save
@@ -119,4 +120,63 @@ class HTMLReportGenerator:
     @staticmethod
     def _format_date(value: datetime) -> str:
         """Format a datetime object."""
-        return value.strftime('%Y-%m-%d') 
+        return value.strftime('%Y-%m-%d')
+    
+    def _format_report_data(self, data: ReportData) -> Dict:
+        """Formats the report data for template insertion."""
+        return {
+            "report_date": data.report_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "total_pnl": self._format_currency(data.total_pnl),
+            "total_pnl_pct": self._format_percentage(data.total_pnl_pct),
+            "active_trades": data.active_trades,
+            "completed_trades": data.completed_trades,
+            "win_rate": self._format_percentage(data.win_rate),
+            "avg_pnl_per_trade": self._format_currency(data.avg_pnl_per_trade),
+            "max_loss": self._format_currency(data.max_loss),
+            "strategy_breakdown": self._format_strategy_breakdown(data.strategy_breakdown),
+            "completed_trades_table": self._generate_completed_trades_table(data.completed_trades_list)
+        }
+        
+    def _format_currency(self, value: float) -> str:
+        """Formats a number as currency."""
+        return f"${value:,.2f}"
+        
+    def _format_percentage(self, value: float) -> str:
+        """Formats a number as a percentage."""
+        return f"{value:.1f}%"
+        
+    def _format_strategy_breakdown(self, breakdown: Dict) -> str:
+        """Formats the strategy breakdown as HTML."""
+        html = "<table class='strategy-breakdown'>"
+        html += "<tr><th>Strategy</th><th>Count</th><th>P&L</th><th>Win Rate</th></tr>"
+        
+        for strategy, stats in breakdown.items():
+            html += f"<tr>"
+            html += f"<td>{strategy}</td>"
+            html += f"<td>{stats['count']}</td>"
+            html += f"<td>{self._format_currency(stats['pnl'])}</td>"
+            html += f"<td>{self._format_percentage(stats['win_rate'])}</td>"
+            html += f"</tr>"
+            
+        html += "</table>"
+        return html
+        
+    def _generate_completed_trades_table(self, trades: List[CompletedTrade]) -> str:
+        """Generates HTML table for completed trades."""
+        html = "<table class='completed-trades'>"
+        html += "<tr><th>Symbol</th><th>Entry Date</th><th>Close Date</th><th>Entry Credit</th><th>Exit Debit</th><th>P&L</th><th>P&L %</th><th>Exit Type</th></tr>"
+        
+        for trade in trades:
+            html += f"<tr>"
+            html += f"<td>{trade.symbol}</td>"
+            html += f"<td>{trade.entry_date.strftime('%Y-%m-%d')}</td>"
+            html += f"<td>{trade.close_date.strftime('%Y-%m-%d')}</td>"
+            html += f"<td>{self._format_currency(trade.entry_credit)}</td>"
+            html += f"<td>{self._format_currency(trade.exit_debit)}</td>"
+            html += f"<td>{self._format_currency(trade.pnl)}</td>"
+            html += f"<td>{self._format_percentage(trade.pnl_pct)}</td>"
+            html += f"<td>{trade.exit_type}</td>"
+            html += f"</tr>"
+            
+        html += "</table>"
+        return html 

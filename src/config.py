@@ -10,10 +10,11 @@ Provides centralized access to all application settings.
 """
 
 import os
-import logging.config
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
+
+from .logging_config import get_logger, setup_logging
 
 # Base paths
 BASE_DIR = Path(__file__).parent.parent
@@ -25,6 +26,10 @@ SCAN_RESULTS_DIR = BASE_DIR / "scan_results"
 # Ensure directories exist
 for directory in [DATA_DIR, DB_DIR, LOGS_DIR, SCAN_RESULTS_DIR]:
     directory.mkdir(exist_ok=True)
+
+# Initialize logging
+setup_logging()
+logger = get_logger(__name__)
 
 class Config:
     """Application configuration management.
@@ -48,8 +53,11 @@ class Config:
         # Load environment variables
         load_dotenv()
         
+        logger.debug("Initializing Config...")
+        
         # API Settings
         self.optionsamurai_token = os.getenv("OPTIONSAMURAI_BEARER_TOKEN")
+        logger.debug("Option Samurai token found: %s", 'Yes' if self.optionsamurai_token else 'No')
         self.tradier_token = os.getenv("TRADIER_TOKEN")
         self.tradier_sandbox = os.getenv("TRADIER_SANDBOX", "true").lower() == "true"
         
@@ -71,24 +79,30 @@ class Config:
         self.min_profit_threshold = float(os.getenv("MIN_PROFIT_THRESHOLD", "0.1"))
         self.max_risk_threshold = float(os.getenv("MAX_RISK_THRESHOLD", "0.5"))
         
-        # Logging Configuration
-        self._setup_logging()
-        
+        logger.info("Configuration initialized successfully")
         self._initialized = True
     
     def _parse_scan_ids(self, env_var: str) -> List[int]:
         """Parse comma-separated scan IDs from environment variable.
         
         Args:
-            env_var: Name of environment variable to parse
+            env_var: Name of the environment variable
             
         Returns:
             List of scan IDs as integers
         """
         scan_ids_str = os.getenv(env_var, "")
         if not scan_ids_str:
+            logger.debug("No scan IDs found for %s", env_var)
             return []
-        return [int(id.strip()) for id in scan_ids_str.split(",") if id.strip()]
+            
+        try:
+            scan_ids = [int(id.strip()) for id in scan_ids_str.split(",") if id.strip()]
+            logger.debug("Parsed scan IDs for %s: %s", env_var, scan_ids)
+            return scan_ids
+        except ValueError as e:
+            logger.error("Error parsing scan IDs from %s: %s", env_var, e)
+            return []
     
     def get_all_configured_scan_ids(self) -> List[int]:
         """Get all configured scan IDs across all strategies.
@@ -102,43 +116,6 @@ class Config:
             self.bear_put_scan_ids
         )
         return list(set(all_ids))  # Remove any duplicates
-    
-    def _setup_logging(self):
-        """Configure logging for the application."""
-        logging_config = {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "standard": {
-                    "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-                },
-            },
-            "handlers": {
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "level": "INFO",
-                    "formatter": "standard",
-                    "stream": "ext://sys.stdout"
-                },
-                "file": {
-                    "class": "logging.handlers.RotatingFileHandler",
-                    "level": "DEBUG",
-                    "formatter": "standard",
-                    "filename": str(LOGS_DIR / "app.log"),
-                    "maxBytes": 10485760,  # 10MB
-                    "backupCount": 5
-                }
-            },
-            "loggers": {
-                "": {  # Root logger
-                    "handlers": ["console", "file"],
-                    "level": os.getenv("LOG_LEVEL", "INFO"),
-                    "propagate": True
-                }
-            }
-        }
-        
-        logging.config.dictConfig(logging_config)
     
     @property
     def database_url(self) -> str:

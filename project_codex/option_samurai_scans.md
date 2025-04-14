@@ -105,108 +105,67 @@ def run_selected_scans():
 The Option Samurai API returns results in the following format:
 ```json
 {
-    "data": [
+    "items": [
         {
-            "name": "Symbol Name",
-            "max_profit": 0.00,
-            "max_return_margin": 0.00,
-            "max_return_margin_annualized": 0.00,
-            "cpd": 0.00,
-            "max_loss": 0.00,
-            "max_loss_percent": 0.00,
-            "dpd": 0.00,
-            "profit_range_percent": 0.00,
-            "atr_range": 0.00,
-            "prob_max_profit": 0.00,
-            "prob_max_loss": 0.00,
-            "spread_profit_ratio": 0.00,
-            "spread_expected_value": 0.00,
-            "ev_ml": 0.00,
-            "ev_dte_ml": 0.00,
-            
-            "market_metrics": {
-                "atr_dollar": 0.00,
-                "atr_percent": 0.00,
-                "average_volume": 0,
-                "beta": 0.00,
-                "dividend_yield": 0.00,
-                "industry": "string",
-                "market_cap": null,
-                "sector_id": 0,
-                "type_id": 0
-            },
-            
-            "stock_data": {
-                "stock_change": 0.00,
-                "stock_open": 0.00,
-                "stock_high": 0.00,
-                "stock_low": 0.00,
-                "stock_close": 0.00,
-                "stock_last": 0.00,
-                "stock_volume": 0,
-                "stock_position": 0.00
-            },
-            
-            "volatility_metrics": {
-                "stock_iv": 0.00,
-                "stock_iv_pr": 0.00,
-                "stock_iv_rv": 0.00,
-                "stock_iv_rv_pr": 0.00,
-                "stock_rv": 0.00,
-                "stock_rv_pr": 0.00,
-                "skew": 0.00,
-                "skew_call_pr": 0.00,
-                "skew_pr": 0.00,
-                "skew_put_pr": 0.00
-            },
-            
-            "performance_metrics": {
-                "performance_half_year": 0.00,
-                "performance_month": 0.00,
-                "performance_quarter": 0.00,
-                "performance_year": 0.00,
-                "performance_ytd": 0.00,
-                "week_52_high": 0.00,
-                "week_52_low": 0.00
-            },
-            
-            "option_data": {
-                "expiration_date": ["YYYY-MM-DD"],
-                "days_to_expiration": [0.00],
-                "strike": [0.00],
-                "prob_otm": 0.00,
-                "option_volume_power": 0.00,
-                "open_interest": [0],
-                "change_percent": [0.00],
-                "moneyness": [0.00],
-                "volume": 0.00,
-                "bid": 0.00,
-                "mid": 0.00,
-                "ask": 0.00
-            },
-            
-            "greeks": {
-                "delta": 0.00,
-                "gamma": 0.00,
-                "theta": 0.00,
-                "vega": 0.00
-            },
-            
-            "leg_data": {
-                "leg_mid": [0.00],
-                "leg_bid_ask_spread": [0.00],
-                "leg_bid_ask_spread_pc": [0.00],
-                "leg_strike_atr": [0.00],
-                "leg_strike_simple_moving_avg_200_day": [0.00],
-                "leg_strike_week_52_high": [0.00],
-                "leg_strike_week_52_low": [0.00]
-            }
+            "id": "string",
+            "name": "string",
+            "symbol": "string",
+            "expiration": "string",
+            "strike": "number",
+            "type": "string",
+            "bid": "number",
+            "ask": "number",
+            "volume": "number",
+            "openInterest": "number",
+            "impliedVolatility": "number",
+            "delta": "number",
+            "gamma": "number",
+            "theta": "number",
+            "vega": "number"
         }
     ],
-    "totalCount": 0,
-    "pageSize": 0
+    "totalCount": "number",
+    "pageSize": "number"
 }
 ```
+
+### Scan IDs and Strategies
+
+1. **High Probability Iron Condors Index ETF** (ID: 35269)
+   - Non-directional strategy for sideways markets
+   - Focuses on high probability setups
+   - Example Results:
+     ```
+     SPY:
+     - Probability: 85.2% profit / 14.8% loss
+     - P/L: $12.50 max profit / $2.50 max loss (5.0 risk/reward)
+     - Structure: 4-leg [420, 425, 435, 440]
+     - Liquidity: 125 option volume, 85M avg stock volume
+     ```
+
+2. **Bull Call Spreads** (ID: 35867)
+   - Directional strategy for bullish market conditions
+   - Focuses on high probability setups
+   - Example Results:
+     ```
+     AAPL:
+     - Probability: 82.1% profit / 17.9% loss
+     - P/L: $15.25 max profit / $4.75 max loss (3.21 risk/reward)
+     - Structure: 2-leg [175, 180]
+     - Liquidity: 95 option volume, 52M avg stock volume
+     ```
+
+3. **Bear Put Spreads** (ID: 35797)
+   - Directional strategy for bearish market conditions
+   - Focuses on high probability setups
+   - Example Results:
+     ```
+     NFLX:
+     - Probability: 86.3% profit / 10.1% loss
+     - P/L: $13.79 max profit / $1.21 max loss (11.37 risk/reward)
+     - Structure: 2-leg [955, 940]
+     - Liquidity: 83 option volume, 4.6M avg stock volume
+     ```
 
 ### Key Data Fields
 
